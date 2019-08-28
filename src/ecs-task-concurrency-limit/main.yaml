@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+# https://s3.amazonaws.com/cloudformation.jsonize.com/ecs-task-concurrency-limit.yaml
+
+Description: Limit the number of concurrent ECS tasks of a kind.
+
+
+Parameters:
+
+  ClusterName:
+    Type: String
+    Description: Name of target cluster
+
+
+Resources:
+
+  ECSTaskConcurrencyLimitLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:*
+                  - ecs:*
+                Resource:
+                  - arn:aws:logs:*:*:*
+                  - arn:aws:ecs:*:*:*
+
+  ECSTaskConcurrencyLimitLambda:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - ECSTaskConcurrencyLimitLambdaRole
+    Properties:
+      Code:
+        ZipFile: |
+          {{file-read file:./lambda.js indent:true}}
+      Handler: index.handler
+      Role: !GetAtt ECSTaskConcurrencyLimitLambdaRole.Arn
+      Runtime: nodejs8.10
+
+  ECSTaskConcurrencyLimitEventRule:
+    Type: AWS::Events::Rule
+    DependsOn:
+      - ECSTaskConcurrencyLimitLambda
+    Properties:
+      Description: Be notified when new ECS tasks launch in cluster ${ClusterName}
+      EventPattern: |
+        {
+          "source": [
+            "aws.ecs"
+          ],
+          "detail-type": [
+            "ECS Task State Change"
+          ],
+          "detail": {
+            "clusterArn": [
+              "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ClusterName}"
+            ]
+          }
+        }
+      Name: ECS-Task-Concurrency-Limit-${ClusterName}
+      State: ENABLED
+      Targets:
+        - Id: IdECSTaskConcurrencyLimitLambda
+          Arn: !GetAtt ECSTaskConcurrencyLimitLambda.Arn
+

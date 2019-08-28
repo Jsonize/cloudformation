@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "compile": "sh compile.sh",
+    "deploy": "aws --profile jsonize s3 cp --recursive ./dist s3://cloudformation.jsonize.com"
+  }
+}
