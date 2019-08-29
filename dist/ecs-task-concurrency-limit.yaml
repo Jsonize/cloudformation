@@ -28,17 +28,24 @@ Resources:
               - sts:AssumeRole
       Path: "/"
       Policies:
-        - PolicyName: root
+        - PolicyName: logs
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
                   - logs:*
-                  - ecs:*
                 Resource:
                   - arn:aws:logs:*:*:*
-                  - arn:aws:ecs:*:*:*
+        - PolicyName: ecs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:*
+                Resource:
+                  - "*"
 
   ECSTaskConcurrencyLimitLambda:
     Type: AWS::Lambda::Function
@@ -116,8 +123,8 @@ Resources:
     DependsOn:
       - ECSTaskConcurrencyLimitLambda
     Properties:
-      Description: Be notified when new ECS tasks launch in cluster ${ClusterName}
-      EventPattern: |
+      Description: !Sub "Be notified when new ECS tasks launch in cluster ${ClusterName}"
+      EventPattern: !Sub |
         {
           "source": [
             "aws.ecs"
@@ -131,9 +138,20 @@ Resources:
             ]
           }
         }
-      Name: ECS-Task-Concurrency-Limit-${ClusterName}
+      Name: !Sub "ECS-Task-Concurrency-Limit-${ClusterName}"
       State: ENABLED
       Targets:
         - Id: IdECSTaskConcurrencyLimitLambda
           Arn: !GetAtt ECSTaskConcurrencyLimitLambda.Arn
+
+  ECSTaskConcurrencyLimitLambdaPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - ECSTaskConcurrencyLimitLambda
+      - ECSTaskConcurrencyLimitEventRule
+    Properties:
+      FunctionName: !GetAtt ECSTaskConcurrencyLimitLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ECSTaskConcurrencyLimitEventRule.Arn
 
