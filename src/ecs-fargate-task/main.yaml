@@ -1,0 +1,98 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+# https://s3.amazonaws.com/cloudformation.jsonize.com/ecs-fargate-task.yaml
+
+Description: Create ECS task on Fargate
+
+
+Parameters:
+
+  TaskName:
+    Type: String
+    Description: The name of the task
+
+  RepoName:
+    Type: String
+    Description: The name of the docker repo on AWS
+
+  ExecutionRoleArn:
+    Type: String
+    Description: Execution role for task
+
+  TaskRoleArn:
+    Type: String
+    Description: Role for the task
+
+  CpuUnits:
+    Type: String
+    Description: 2-multiple of 256
+    Default: 256
+    AllowedValues:
+      - 256
+      - 512
+      - 1024
+      - 2048
+      - 4096
+      - 8192
+
+  MemoryUnits:
+    Type: String
+    Description: 2-multiple of 512
+    Default: 512
+    AllowedValues:
+      - 512
+      - 1024
+      - 2048
+      - 4096
+      - 8192
+        TaskCountMax: 1
+        TaskCountMaxByStartedBy: true
+
+  TaskCountMax:
+    Type: String
+    Description: Limit the number of concurrent tasks? (empty for no limit)
+
+  TaskCountMaxByStartedBy:
+    Type: String
+    Description: Limit the number of concurrent tasks by filtering by started by? (true for yes)
+
+
+Resources:
+
+  ECSFargateTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Conditions:
+      HasTaskCountMax: !Not [ !Equals ["", !Ref TaskCountMax]]
+      HasTaskCountMaxByStartedBy: !Not [ !Equals ["", !Ref TaskCountMaxByStartedBy]]
+    Properties:
+      Family: !Ref TaskName
+      Cpu: !Ref CpuUnits
+      Memory: !Ref MemoryUnits
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !Ref ExecutionRoleArn
+      TaskRoleArn: !Ref TaskRoleArn
+      RequiresCompatibilities:
+        - FARGATE
+      Tags:
+        - Key: !If [HasTaskCountMax, "task-count-max", !Ref AWS::NoValue]
+          Value: !If [HasTaskCountMax, !Ref TaskCountMax, !Ref AWS::NoValue]
+        - Key: !If [HasTaskCountMaxByStartedBy, "task-count-max-by-started-by", !Ref AWS::NoValue]
+          Value: !If [HasTaskCountMaxByStartedBy, !Ref TaskCountMaxByStartedBy, !Ref AWS::NoValue]
+      ContainerDefinitions:
+        - Name: !Ref TaskName
+          Essential: true
+          MemoryReservation: !Ref MemoryUnits
+          Cpu: !Ref CpuUnits
+          Image: !Join [ "", [ !Ref "AWS::AccountId", ".dkr.ecr.", !Ref "AWS::Region", ".amazonaws.com/", !RepoName, ":latest" ] ]
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Join [ "", [ "/ecs/", !Ref TaskName ] ]
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: "ecs"
+
+  ECSFargateTaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Join [ "", [ "/ecs/", !Ref TaskName ] ]
+      RetentionInDays: 30

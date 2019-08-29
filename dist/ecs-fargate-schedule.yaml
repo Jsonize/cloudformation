@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+# https://s3.amazonaws.com/cloudformation.jsonize.com/ecs-fargate-schedule.yaml
+
+Description: Create ECS task on Fargate
+
+
+Parameters:
+
+  TaskName:
+    Type: String
+    Description: The name of the task
+
+  ScheduleName:
+    Type: String
+    Description: The name of the schedule
+
+  ScheduleExpression:
+    Type: String
+    Description: Schedule expression, e.g. 'rate(6 hours)'
+
+  ClusterSecurityGroup:
+    Type: String
+    Description: Cluster security group
+
+  ClusterSubnets:
+    Type: List<String>
+    Description: Subnets of cluster
+
+  ExecutionRoleArn:
+    Type: String
+    Description: Execution role for task
+
+  ClusterName:
+    Type: String
+    Description: Name of target cluster
+
+  ContainerOverrides:
+    Type: String
+    Description: Optional container overrides (JSON)
+
+
+Resources:
+
+  ECSFargateScheduleRule:
+    Type: AWS::Events::Rule
+    Conditions:
+      HasContainerOverrides: !Not [ !Equals ["", !Ref ContainerOverrides]]
+    Properties:
+      Name: !Ref ScheduleName
+      ScheduleExpression: !Ref ScheduleExpression
+      State: ENABLED
+      Targets:
+        - Id: !Ref ScheduleName
+          RoleArn: !Ref ExecutionRoleArn
+          Arn: !Join [ "", ["arn:aws:ecs:", !Ref "AWS::Region", ":", !Ref "AWS::AccountId", ":cluster/", !Ref ClusterName]]
+          Input: !If [HasContainerOverrides, !Join [ "", [ "{containerOverrides:[", !Ref ContainerOverrides, "]}" ] ], !Ref AWS::NoValue]
+          EcsParameters:
+            TaskDefinitionArn: !Join [ "", ["arn:aws:ecs:", !Ref "AWS::Region", ":", !Ref "AWS::AccountId", ":task-definition/", !Ref TaskName]]
+            TaskCount: 1
+            LaunchType: 'FARGATE'
+            PlatformVersion: 'LATEST'
+            NetworkConfiguration:
+              AwsVpcConfiguration:
+                AssignPublicIp: ENABLED
+                SecurityGroups:
+                  - !Ref ClusterSecurityGroup
+                Subnets: !Ref ClusterSubnets
