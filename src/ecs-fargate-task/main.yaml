@@ -45,8 +45,6 @@ Parameters:
       - 2048
       - 4096
       - 8192
-        TaskCountMax: 1
-        TaskCountMaxByStartedBy: true
 
   TaskCountMax:
     Type: String
@@ -55,15 +53,19 @@ Parameters:
   TaskCountMaxByStartedBy:
     Type: String
     Description: Limit the number of concurrent tasks by filtering by started by? (true for yes)
+    Default: false
+    AllowedValues: ["true", "false"]
+
+
+Conditions:
+  HasTaskCountMax: !Not [ !Equals ["", !Ref TaskCountMax]]
+  HasTaskCountMaxByStartedBy: !Equals ["true", !Ref TaskCountMaxByStartedBy]
 
 
 Resources:
 
   ECSFargateTaskDefinition:
     Type: AWS::ECS::TaskDefinition
-    Conditions:
-      HasTaskCountMax: !Not [ !Equals ["", !Ref TaskCountMax]]
-      HasTaskCountMaxByStartedBy: !Not [ !Equals ["", !Ref TaskCountMaxByStartedBy]]
     Properties:
       Family: !Ref TaskName
       Cpu: !Ref CpuUnits
@@ -74,16 +76,22 @@ Resources:
       RequiresCompatibilities:
         - FARGATE
       Tags:
-        - Key: !If [HasTaskCountMax, "task-count-max", !Ref AWS::NoValue]
-          Value: !If [HasTaskCountMax, !Ref TaskCountMax, !Ref AWS::NoValue]
-        - Key: !If [HasTaskCountMaxByStartedBy, "task-count-max-by-started-by", !Ref AWS::NoValue]
-          Value: !If [HasTaskCountMaxByStartedBy, !Ref TaskCountMaxByStartedBy, !Ref AWS::NoValue]
+        - !If
+          - HasTaskCountMax
+          - Key: task-count-max
+            Value: !Ref TaskCountMax
+          - !Ref "AWS::NoValue"
+        - !If
+          - HasTaskCountMaxByStartedBy
+          - Key: task-count-max-by-started-by
+            Value: !Ref TaskCountMaxByStartedBy
+          - !Ref "AWS::NoValue"
       ContainerDefinitions:
         - Name: !Ref TaskName
           Essential: true
           MemoryReservation: !Ref MemoryUnits
           Cpu: !Ref CpuUnits
-          Image: !Join [ "", [ !Ref "AWS::AccountId", ".dkr.ecr.", !Ref "AWS::Region", ".amazonaws.com/", !RepoName, ":latest" ] ]
+          Image: !Join [ "", [ !Ref "AWS::AccountId", ".dkr.ecr.", !Ref "AWS::Region", ".amazonaws.com/", !Ref RepoName, ":latest" ] ]
           LogConfiguration:
             LogDriver: awslogs
             Options:
