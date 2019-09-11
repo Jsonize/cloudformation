@@ -1,4 +1,4 @@
 #!/bin/sh
-cd src/ecs-task-concurrency-limit ; cat main.yaml | ufpp > ../../dist/ecs-task-concurrency-limit.yaml ; cd ../..
-cd src/ecs-fargate-task ; cat main.yaml | ufpp > ../../dist/ecs-fargate-task.yaml ; cd ../..
-cd src/ecs-fargate-schedule ; cat main.yaml | ufpp > ../../dist/ecs-fargate-schedule.yaml ; cd ../..
+for identifier in ecs-task-concurrency-limit ecs-fargate-task ecs-fargate-schedule apigateway-websocket-callback apigateway-websocket-proxy apigateway-lambda-proxy; do
+  cd src/$identifier ; cat main.yaml | ufpp > ../../dist/$identifier.yaml ; cd ../..
+done

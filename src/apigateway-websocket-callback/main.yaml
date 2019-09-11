@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+# https://s3.amazonaws.com/cloudformation.jsonize.com/apigateway-websocket-callback.yaml
+
+Description: Resources for setting up a websocket callback system.
+
+
+Parameters:
+
+  ResourceName:
+    Type: String
+    Description: The resource name
+
+  CertificateArn:
+    Type: String
+    Description: The arn of the SSL certificate
+
+  ZoneDomain:
+    Type: String
+    Description: The zone domain for the resource
+
+  SubDomain:
+    Type: String
+    Description: The sub domain for the system
+
+
+Resources:
+
+  CallbackGateway:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Ref ResourceName
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: \$default
+
+  CallbackGatewayDefaultIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    DependsOn:
+      CallbackGateway
+    Properties:
+      ApiId: !Ref CallbackGateway
+      IntegrationType: MOCK
+
+  CallbackGatewayRouteMessage:
+    Type: AWS::ApiGatewayV2::Route
+    DependsOn:
+      - CallbackGateway
+      - CallbackGatewayDefaultIntegration
+    Properties:
+      ApiId: !Ref CallbackGateway
+      RouteKey: $default
+      Target: !Join [ "", [ "integrations/", !Ref CallbackGatewayDefaultIntegration ] ]
+
+  CallbackGatewayDeployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+      - CallbackGateway
+      - CallbackGatewayRouteMessage
+    Properties:
+      ApiId: !Ref CallbackGateway
+
+  CallbackGatewayStage:
+    Type: AWS::ApiGatewayV2::Stage
+    DependsOn:
+      - CallbackGateway
+      - CallbackGatewayDeployment
+    Properties:
+      ApiId: !Ref CallbackGateway
+      DeploymentId: !Ref CallbackGatewayDeployment
+      StageName: production
+
+  CallbackGatewayDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
+      DomainNameConfigurations:
+        - CertificateArn: !Ref CertificateArn
+
+  CallbackGatewayApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    DependsOn:
+      - CallbackGateway
+      - CallbackGatewayStage
+    Properties:
+      ApiId: !Ref CallbackGateway
+      DomainName: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
+      Stage: !Ref CallbackGatewayStage
+
+  CallbackGatewayRoute53:
+    Type: AWS::Route53::RecordSet
+    DependsOn:
+      - CallbackGatewayDomainName
+    Properties:
+      HostedZoneName: !Join [ "", [ !Ref ZoneDomain, "." ] ]
+      Name: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
+      TTL: 300
+      ResourceRecords:
+        - !GetAtt TenantCallbackGatewayDomainName.RegionalDomainName
+      Type: CNAME
