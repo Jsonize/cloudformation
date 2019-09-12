@@ -95,5 +95,5 @@ Resources:
       Name: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
       TTL: 300
       ResourceRecords:
-        - !GetAtt TenantCallbackGatewayDomainName.RegionalDomainName
+        - !GetAtt CallbackGatewayDomainName.RegionalDomainName
       Type: CNAME
