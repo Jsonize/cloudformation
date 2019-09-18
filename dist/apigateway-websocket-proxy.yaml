@@ -136,21 +136,47 @@ Resources:
           };
       Environment:
         Variables:
-          AUTHORIZER_URI: !Ref AuthorizerUri
+          AUTHORIZE_URI: !Ref AuthorizerUri
       Handler: index.handler
       Role: !GetAtt LambdaWebsocketAuthorizerRole.Arn
       Runtime: nodejs8.10
+
+  LambdaWebsocketAuthorizerApiGatewayRole:
+    Type: AWS::IAM::Role
+    DependsOn:
+      - LambdaWebsocketAuthorizer
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt LambdaWebsocketAuthorizer.Arn
 
   WebsocketApiGatewayAuthorizer:
     Type: AWS::ApiGatewayV2::Authorizer
     DependsOn:
       - WebsocketApiGateway
       - LambdaWebsocketAuthorizer
+      - LambdaWebsocketAuthorizerApiGatewayRole
     Properties:
       Name: !Join [ "", [ !Ref ResourceName, "Authorizer" ] ]
       ApiId: !Ref WebsocketApiGateway
       AuthorizerType: REQUEST
       AuthorizerUri: !Join [ "", [ "arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/", !GetAtt LambdaWebsocketAuthorizer.Arn, "/invocations" ] ]
+      AuthorizerCredentialsArn: !GetAtt LambdaWebsocketAuthorizerApiGatewayRole.Arn
       IdentitySource: !Ref IdentitySources
 
   WebsocketApiGatewayConnectIntegration:
