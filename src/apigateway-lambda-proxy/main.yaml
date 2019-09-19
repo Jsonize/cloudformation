@@ -33,6 +33,8 @@ Resources:
   ApiGatewayApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
+      BinaryMediaTypes:
+        - multipart/form-data
       Body:
         swagger: 2.0
         info:
