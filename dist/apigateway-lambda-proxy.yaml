@@ -54,7 +54,7 @@ Resources:
                   type: string
               responses: {}
               x-amazon-apigateway-integration:
-                uri: !Join ["", ["arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/arn:aws:lambda:", !Ref "AWS::Region", ":", !Ref "AWS::AccountId", ":function:", !Ref LambdaFunctionArn, "/invocations" ] ]
+                uri: !Join ["", ["arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/", !Ref LambdaFunctionArn, "/invocations" ] ]
                 httpMethod: POST
                 type: aws_proxy
             options:

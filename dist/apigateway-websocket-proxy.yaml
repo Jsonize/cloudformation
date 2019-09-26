@@ -191,11 +191,11 @@ Resources:
       RequestTemplates:
         default: |
           {
-            connectionId: $context.connectionId
-            domain: $context.domainName
-            stage: $context.stage
-            requestId: $context.requestId
-            body: $input.body
+            "connectionId": "$context.connectionId",
+            "domain": "$context.domainName",
+            "stage": "$context.stage",
+            "requestId": "$context.requestId",
+            "body": "$input.body"
           }
       TemplateSelectionExpression: default
 
@@ -250,11 +250,11 @@ Resources:
       RequestTemplates:
         default: |
           {
-            connectionId: $context.connectionId
-            domain: $context.domainName
-            stage: $context.stage
-            requestId: $context.requestId
-            body: $input.body
+            "connectionId": "$context.connectionId",
+            "domain": "$context.domainName",
+            "stage": "$context.stage",
+            "requestId": "$context.requestId",
+            "body": "$input.body"
           }
       TemplateSelectionExpression: default
 
@@ -306,11 +306,11 @@ Resources:
       RequestTemplates:
         default: |
           {
-            connectionId: $context.connectionId
-            domain: $context.domainName
-            stage: $context.stage
-            requestId: $context.requestId
-            body: $input.body
+            "connectionId": "$context.connectionId",
+            "domain": "$context.domainName",
+            "stage": "$context.stage",
+            "requestId": "$context.requestId",
+            "body": "$input.body"
           }
       TemplateSelectionExpression: default
 
