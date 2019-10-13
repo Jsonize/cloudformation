@@ -35,8 +35,10 @@ exports.handler = (event, context, callback) => {
             cluster: cluster,
             family: family
         };
-        if (taskCountMaxByStartedBy)
+        if (taskCountMaxByStartedBy) {
             listTasksQuery.startedBy = startedBy;
+            delete listTasksQuery.family;
+        }
         ecs.listTasks(listTasksQuery, function (err, data) {
             if (err) {
                 console.log(err);
