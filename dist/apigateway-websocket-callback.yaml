@@ -81,6 +81,7 @@ Resources:
     DependsOn:
       - CallbackGateway
       - CallbackGatewayStage
+      - CallbackGatewayDomainName
     Properties:
       ApiId: !Ref CallbackGateway
       DomainName: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
