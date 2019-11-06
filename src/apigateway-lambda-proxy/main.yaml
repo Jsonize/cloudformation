@@ -130,6 +130,7 @@ Resources:
     DependsOn:
       - ApiGatewayApi
       - ApiGatewayApiStage
+      - ApiGatewayApiDomainName
     Properties:
       RestApiId: !Ref ApiGatewayApi
       DomainName: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
