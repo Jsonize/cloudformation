@@ -356,6 +356,7 @@ Resources:
     DependsOn:
       - WebsocketApiGateway
       - WebsocketApiGatewayStage
+      - WebsocketApiGatewayDomainName
     Properties:
       ApiId: !Ref WebsocketApiGateway
       DomainName: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
