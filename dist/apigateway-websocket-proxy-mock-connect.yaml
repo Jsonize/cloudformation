@@ -1,0 +1,360 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+# https://s3.amazonaws.com/cloudformation.jsonize.com/apigateway-websocket-proxy.yaml
+
+Description: Resources for setting up a websocket proxy system with a mock connect endpoint.
+
+
+Parameters:
+
+  ResourceName:
+    Type: String
+    Description: The resource name
+
+  CertificateArn:
+    Type: String
+    Description: The arn of the SSL certificate
+
+  ZoneDomain:
+    Type: String
+    Description: The zone domain for the resource
+
+  SubDomain:
+    Type: String
+    Description: The zone domain for the resource
+
+  AuthorizerUri:
+    Type: String
+    Description: The authorizer uri for the resource
+
+  DisconnectUri:
+    Type: String
+    Description: The disconnect uri for the resource
+
+  MessageUri:
+    Type: String
+    Description: The message uri for the resource
+
+  IdentitySources:
+    Type: List<String>
+    Description: List of identity source for authorization
+
+
+Resources:
+
+  WebsocketApiGateway:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Ref ResourceName
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: \$default
+
+  LambdaWebsocketAuthorizerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:*
+                Resource: arn:aws:logs:*:*:*
+
+  LambdaWebsocketAuthorizer:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - LambdaWebsocketAuthorizerRole
+    Properties:
+      Code:
+        ZipFile: |
+          const Url = require('url');
+          const Https = require('https');
+          const Http = require('http');
+          const Querystring = require('querystring');
+          const request = function (method, uri, data, callback) {
+              var parsed = Url.parse(uri);
+              data = JSON.stringify(data);
+              var req = (parsed.protocol.indexOf("https") === 0 ? Https : Http).request({
+                  hostname: parsed.hostname,
+                  port: parsed.port,
+                  path: parsed.path,
+                  method: method,
+                  headers: {
+                      'Content-Type': 'application/json',
+                      'Content-Length': data.length
+                  }
+              }, function (response) {
+                  var respData = "";
+                  response.on('data', function (data) {
+                      respData += data;
+                  });
+                  response.on("end", function () {
+                      callback(response, JSON.parse(respData.trim()));
+                  });
+              });
+              req.on("error", function () {
+                  callback({statusCode: 500}, {});
+              });
+              req.write(data);
+              req.end();
+          };
+          exports.handler = function(event, context, callback) {
+              request("POST", process.env.AUTHORIZE_URI + "?" + Querystring.stringify(event.queryStringParameters),{
+                  connectionId: event.requestContext.connectionId
+              }, function (response, responseData) {
+                  if (response.statusCode === 200) {
+                      callback(null, {
+                          principalId: 'user',
+                          policyDocument: {
+                              Version: '2012-10-17',
+                              Statement: [{
+                                  Action: 'execute-api:Invoke',
+                                  Effect: "Allow",
+                                  Resource: event.methodArn
+                              }]
+                          }
+                      })
+                  } else
+                      callback("Unauthorized");
+              });
+          };
+      Environment:
+        Variables:
+          AUTHORIZE_URI: !Ref AuthorizerUri
+      Handler: index.handler
+      Role: !GetAtt LambdaWebsocketAuthorizerRole.Arn
+      Runtime: nodejs8.10
+
+  LambdaWebsocketAuthorizerApiGatewayRole:
+    Type: AWS::IAM::Role
+    DependsOn:
+      - LambdaWebsocketAuthorizer
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt LambdaWebsocketAuthorizer.Arn
+
+  WebsocketApiGatewayAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    DependsOn:
+      - WebsocketApiGateway
+      - LambdaWebsocketAuthorizer
+      - LambdaWebsocketAuthorizerApiGatewayRole
+    Properties:
+      Name: !Join [ "", [ !Ref ResourceName, "Authorizer" ] ]
+      ApiId: !Ref WebsocketApiGateway
+      AuthorizerType: REQUEST
+      AuthorizerUri: !Join [ "", [ "arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/", !GetAtt LambdaWebsocketAuthorizer.Arn, "/invocations" ] ]
+      AuthorizerCredentialsArn: !GetAtt LambdaWebsocketAuthorizerApiGatewayRole.Arn
+      IdentitySource: !Ref IdentitySources
+
+  WebsocketApiGatewayConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    DependsOn:
+      - WebsocketApiGateway
+    Properties:
+      ApiId: !Ref WebsocketApiGateway
+      IntegrationType: MOCK
+      RequestTemplates:
+        default: |
+          {
+            "statusCode": 200
+          }
+      TemplateSelectionExpression: default
+
+  WebsocketApiGatewayConnectIntegrationResponse:
+    Type: AWS::ApiGatewayV2::IntegrationResponse
+    DependsOn:
+      - WebsocketApiGateway
+      - WebsocketApiGatewayConnectIntegration
+    Properties:
+      ApiId: !Ref WebsocketApiGateway
+      IntegrationId: !Ref WebsocketApiGatewayConnectIntegration
+      IntegrationResponseKey: $default
+
+  WebsocketApiGatewayRouteConnect:
+    Type: AWS::ApiGatewayV2::Route
+    DependsOn:
+      - WebsocketApiGateway
+      - WebsocketApiGatewayAuthorizer
+      - WebsocketApiGatewayConnectIntegration
+    Properties:
+      ApiId: !Ref WebsocketApiGateway
+      RouteKey: $connect
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref WebsocketApiGatewayAuthorizer
+      RouteResponseSelectionExpression: $default
+      Target: !Join [ "", [ "integrations/", !Ref WebsocketApiGatewayConnectIntegration ] ]
+
+  WebsocketApiGatewayRouteResponseConnect:
+    Type: 'AWS::ApiGatewayV2::RouteResponse'
+    DependsOn:
+      - WebsocketApiGateway
+      - WebsocketApiGatewayRouteConnect
+    Properties:
+      ApiId: !Ref WebsocketApiGateway
+      RouteId: !Ref WebsocketApiGatewayRouteConnect
+      RouteResponseKey: $default
+
+  WebsocketApiGatewayDisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    DependsOn:
+      - WebsocketApiGateway
+    Properties:
+      ApiId: !Ref WebsocketApiGateway
+      IntegrationMethod: POST
+      IntegrationType: HTTP
+      IntegrationUri: !Ref DisconnectUri
+      RequestTemplates:
+        default: |
+          {
+            "connectionId": "$context.connectionId",
+            "domain": "$context.domainName",
+            "stage": "$context.stage",
+            "requestId": "$context.requestId",
+            "body": "$input.body"
+          }
+      TemplateSelectionExpression: default
+
+  WebsocketApiGatewayDisconnectIntegrationResponse:
+    Type: AWS::ApiGatewayV2::IntegrationResponse
+    DependsOn:
+      - WebsocketApiGateway
+      - WebsocketApiGatewayDisconnectIntegration
+    Properties:
+      ApiId: !Ref WebsocketApiGateway
+      IntegrationId: !Ref WebsocketApiGatewayDisconnectIntegration
+      IntegrationResponseKey: $default
+      ResponseTemplates:
+        default: |
+          {
+          }
+      TemplateSelectionExpression: default
+
+  WebsocketApiGatewayRouteDisconnect:
+    Type: AWS::ApiGatewayV2::Route
+    DependsOn:
+      - WebsocketApiGateway
+      - WebsocketApiGatewayDisconnectIntegration
+    Properties:
+      ApiId: !Ref WebsocketApiGateway
+      RouteKey: $disconnect
+      RouteResponseSelectionExpression: $default
+      Target: !Join [ "", [ "integrations/", !Ref WebsocketApiGatewayDisconnectIntegration ] ]
+
+  WebsocketApiGatewayRouteResponseDisconnect:
+    Type: 'AWS::ApiGatewayV2::RouteResponse'
+    DependsOn:
+      - WebsocketApiGateway
+      - WebsocketApiGatewayRouteDisconnect
+    Properties:
+      ApiId: !Ref WebsocketApiGateway
+      RouteId: !Ref WebsocketApiGatewayRouteDisconnect
+      RouteResponseKey: $default
+
+  WebsocketApiGatewayDefaultIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    DependsOn:
+      - WebsocketApiGateway
+    Properties:
+      ApiId: !Ref WebsocketApiGateway
+      IntegrationMethod: POST
+      IntegrationType: HTTP
+      IntegrationUri: !Ref MessageUri
+      RequestTemplates:
+        default: |
+          {
+            "connectionId": "$context.connectionId",
+            "domain": "$context.domainName",
+            "stage": "$context.stage",
+            "requestId": "$context.requestId",
+            "body": "$input.body"
+          }
+      TemplateSelectionExpression: default
+
+  WebsocketApiGatewayRouteMessage:
+    Type: AWS::ApiGatewayV2::Route
+    DependsOn:
+      - WebsocketApiGateway
+      - WebsocketApiGatewayDefaultIntegration
+    Properties:
+      ApiId: !Ref WebsocketApiGateway
+      RouteKey: $default
+      Target: !Join [ "", [ "integrations/", !Ref WebsocketApiGatewayDefaultIntegration ] ]
+
+  WebsocketApiGatewayDeployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+      - WebsocketApiGateway
+      - WebsocketApiGatewayRouteConnect
+      - WebsocketApiGatewayRouteDisconnect
+      - WebsocketApiGatewayRouteMessage
+    Properties:
+      ApiId: !Ref WebsocketApiGateway
+
+  WebsocketApiGatewayStage:
+    Type: AWS::ApiGatewayV2::Stage
+    DependsOn:
+      - WebsocketApiGateway
+      - WebsocketApiGatewayDeployment
+    Properties:
+      ApiId: !Ref WebsocketApiGateway
+      DeploymentId: !Ref WebsocketApiGatewayDeployment
+      StageName: production
+
+  WebsocketApiGatewayDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
+      DomainNameConfigurations:
+        - CertificateArn: !Ref CertificateArn
+
+  WebsocketApiGatewayApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    DependsOn:
+      - WebsocketApiGateway
+      - WebsocketApiGatewayStage
+      - WebsocketApiGatewayDomainName
+    Properties:
+      ApiId: !Ref WebsocketApiGateway
+      DomainName: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
+      Stage: !Ref WebsocketApiGatewayStage
+
+  WebsocketApiGatewayRoute53:
+    Type: AWS::Route53::RecordSet
+    DependsOn:
+      - WebsocketApiGatewayDomainName
+    Properties:
+      HostedZoneName: !Join [ "", [ !Ref ZoneDomain, "." ] ]
+      Name: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
+      TTL: 300
+      ResourceRecords:
+        - !GetAtt WebsocketApiGatewayDomainName.RegionalDomainName
+      Type: CNAME
