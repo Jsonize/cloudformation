@@ -1,0 +1,260 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+# https://s3.amazonaws.com/cloudformation.jsonize.com/apigateway-lambda-proxy.yaml
+
+Description: Resources for setting up an api gateway with a lambda proxy backend.
+
+
+Parameters:
+
+  CertificateArn:
+    Type: String
+    Description: The arn of the SSL certificate
+
+  ZoneDomain:
+    Type: String
+    Description: The zone domain for the resource
+
+  SubDomain:
+    Type: String
+    Description: The sub domain for the resource
+
+  ResourceName:
+    Type: String
+    Description: The resource name
+
+  LambdaFunctionArn:
+    Type: String
+    Description: The lambda function arn
+
+  BasicAuthUser:
+    Type: String
+    Description: Basic auth user name
+
+  BasicAuthPassword:
+    Type: String
+    Description: Basic auth password
+
+
+Resources:
+
+  ApiGatewayApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      BinaryMediaTypes:
+        - multipart/form-data
+      Body:
+        swagger: 2.0
+        info:
+          title: !Ref ResourceName
+        basePath: /production
+        schemes:
+          - https
+        paths:
+          /{proxy+}:
+            x-amazon-apigateway-any-method:
+              produces:
+                - application/json
+              parameters:
+                - name: proxy
+                  in: path
+                  required: true
+                  type: string
+              responses: {}
+              x-amazon-apigateway-integration:
+                uri: !Join ["", ["arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/", !Ref LambdaFunctionArn, "/invocations" ] ]
+                httpMethod: POST
+                type: aws_proxy
+            options:
+              consumes:
+                - application/json
+              produces:
+                - application/json
+              responses:
+                "200":
+                  description: 200 response
+                  schema:
+                    $ref: "#/definitions/Empty"
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+                    Access-Control-Allow-Headers:
+                      type: string
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                passthroughBehavior: when_no_match
+                requestTemplates:
+                  application/json: "{\"statusCode\": 200}"
+                type: mock
+        definitions:
+          Empty:
+            type: object
+            title: Empty Schema
+
+  LambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunctionArn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Join ["", [ "arn:aws:execute-api:", !Ref "AWS::Region", ":", !Ref "AWS::AccountId", ":", !Ref ApiGatewayApi, "/*/*" ] ]
+
+  ApiGatewayApiDomainName:
+    Type: AWS::ApiGateway::DomainName
+    Properties:
+      DomainName: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
+      CertificateArn: !Ref CertificateArn
+      EndpointConfiguration:
+        Types:
+          - EDGE
+
+  ApiGatewayApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiGatewayApi
+    Properties:
+      RestApiId: !Ref ApiGatewayApi
+
+  ApiGatewayApiStage:
+    Type: AWS::ApiGateway::Stage
+    DependsOn:
+      - ApiGatewayApi
+      - ApiGatewayApiDeployment
+    Properties:
+      RestApiId: !Ref ApiGatewayApi
+      DeploymentId: !Ref ApiGatewayApiDeployment
+      StageName: production
+
+  ApiGatewayBasePathMapping:
+    Type: AWS::ApiGateway::BasePathMapping
+    DependsOn:
+      - ApiGatewayApi
+      - ApiGatewayApiStage
+      - ApiGatewayApiDomainName
+    Properties:
+      RestApiId: !Ref ApiGatewayApi
+      DomainName: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
+      Stage: !Ref ApiGatewayApiStage
+
+  ApiGatewayRoute53:
+    Type: AWS::Route53::RecordSet
+    DependsOn:
+      - ApiGatewayApiDomainName
+    Properties:
+      HostedZoneName: !Join [ "", [ !Ref ZoneDomain, "." ] ]
+      Name: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
+      TTL: 300
+      ResourceRecords:
+        - !GetAtt ApiGatewayApiDomainName.DistributionDomainName
+      Type: CNAME
+
+  LambdaAuthorizerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:*
+                Resource: arn:aws:logs:*:*:*
+
+  LambdaAuthorizer:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - LambdaAuthorizerRole
+    Properties:
+      Code:
+        ZipFile: |
+          exports.handler = function (event, context, callback) {
+              var authorizationHeader = event.headers.Authorization;
+          
+              if (!authorizationHeader)
+                  return callback('Unauthorized');
+          
+              var encodedCreds = authorizationHeader.split(' ')[1];
+              var plainCreds = (new Buffer(encodedCreds, 'base64')).toString().split(':');
+              var username = plainCreds[0];
+              var password = plainCreds[1];
+          
+              if (!(username === process.env.BASIC_AUTH_USER && password === process.env.BASIC_AUTH_PASSWORD))
+                  return callback('Unauthorized');
+          
+              callback(null, {
+                  principalId: 'user',
+                  policyDocument: {
+                      Version: '2012-10-17',
+                      Statement: [{
+                          Action: 'execute-api:Invoke',
+                          Effect: "Allow",
+                          Resource: event.methodArn
+                      }]
+                  }
+              });
+          };
+          
+      Environment:
+        Variables:
+          BASIC_AUTH_USER: !Ref BasicAuthUser
+          BASIC_AUTH_PASSWORD: !Ref BasicAuthPassword
+      Handler: index.handler
+      Role: !GetAtt LambdaAuthorizerRole.Arn
+      Runtime: nodejs8.10
+
+  LambdaAuthorizerApiGatewayRole:
+    Type: AWS::IAM::Role
+    DependsOn:
+      - LambdaAuthorizer
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt LambdaAuthorizer.Arn
+
+  ApiGatewayAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
+    DependsOn:
+      - ApiGatewayApi
+      - LambdaAuthorizer
+      - LambdaAuthorizerApiGatewayRole
+    Properties:
+      Name: !Join [ "", [ !Ref ResourceName, "Authorizer" ] ]
+      RestApiId: !Ref ApiGatewayApi
+      Type: REQUEST
+      AuthorizerUri: !Join [ "", [ "arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/", !GetAtt LambdaAuthorizer.Arn, "/invocations" ] ]
+      AuthorizerCredentialsArn: !GetAtt LambdaAuthorizerApiGatewayRole.Arn
+      IdentitySource: route.request.header.Auth
