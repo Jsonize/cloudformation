@@ -4,6 +4,7 @@ AWSTemplateFormatVersion: 2010-09-09
 
 Description: Resources for setting up an api gateway with a lambda proxy backend.
 
+# TODO: This is currently lacking associating the authorizer with methods.
 
 Parameters:
 
@@ -256,5 +257,5 @@ Resources:
       RestApiId: !Ref ApiGatewayApi
       Type: REQUEST
       AuthorizerUri: !Join [ "", [ "arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/", !GetAtt LambdaAuthorizer.Arn, "/invocations" ] ]
-      AuthorizerCredentialsArn: !GetAtt LambdaAuthorizerApiGatewayRole.Arn
-      IdentitySource: route.request.header.Auth
+      AuthorizerCredentials: !GetAtt LambdaAuthorizerApiGatewayRole.Arn
+      IdentitySource: method.request.header.Authorization
