@@ -195,6 +195,7 @@ Resources:
       Handler: index.handler
       Role: !GetAtt LambdaAuthorizerRole.Arn
       Runtime: nodejs8.10
+      Timeout: 60
 
   LambdaAuthorizerApiGatewayRole:
     Type: AWS::IAM::Role

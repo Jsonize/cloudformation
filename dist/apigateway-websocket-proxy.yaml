@@ -140,6 +140,7 @@ Resources:
       Handler: index.handler
       Role: !GetAtt LambdaWebsocketAuthorizerRole.Arn
       Runtime: nodejs8.10
+      Timeout: 60
 
   LambdaWebsocketAuthorizerApiGatewayRole:
     Type: AWS::IAM::Role

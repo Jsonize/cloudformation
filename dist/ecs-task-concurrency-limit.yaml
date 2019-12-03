@@ -120,6 +120,7 @@ Resources:
       Handler: index.handler
       Role: !GetAtt ECSTaskConcurrencyLimitLambdaRole.Arn
       Runtime: nodejs8.10
+      Timeout: 60
 
   ECSTaskConcurrencyLimitEventRule:
     Type: AWS::Events::Rule
