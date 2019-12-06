@@ -280,7 +280,11 @@ Resources:
     DependsOn:
       - WebsocketApiGateway
       - WebsocketApiGatewayRouteConnect
+      - WebsocketApiGatewayConnectIntegrationResponse
+      - WebsocketApiGatewayRouteResponseConnect
       - WebsocketApiGatewayRouteDisconnect
+      - WebsocketApiGatewayDisconnectIntegrationResponse
+      - WebsocketApiGatewayRouteResponseDisconnect
       - WebsocketApiGatewayRouteMessage
     Properties:
       ApiId: !Ref WebsocketApiGateway
