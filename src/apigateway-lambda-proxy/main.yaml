@@ -35,6 +35,8 @@ Resources:
     Properties:
       BinaryMediaTypes:
         - multipart/form-data
+        - application/octet-stream
+        - application/pdf
       Body:
         swagger: 2.0
         info:
