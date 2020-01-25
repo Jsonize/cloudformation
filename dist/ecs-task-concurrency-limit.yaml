@@ -119,7 +119,7 @@ Resources:
           
       Handler: index.handler
       Role: !GetAtt ECSTaskConcurrencyLimitLambdaRole.Arn
-      Runtime: nodejs8.10
+      Runtime: nodejs12.x
       Timeout: 60
 
   ECSTaskConcurrencyLimitEventRule:
