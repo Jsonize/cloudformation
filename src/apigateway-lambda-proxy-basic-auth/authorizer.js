@@ -12,6 +12,14 @@ exports.handler = function (event, context, callback) {
     if (!(username === process.env.BASIC_AUTH_USER && password === process.env.BASIC_AUTH_PASSWORD))
         return callback('Unauthorized');
 
+    var tmp = event.methodArn.split(':')
+    var apiGatewayArnTmp = tmp[5].split('/')
+    var awsAccountId = tmp[4]
+    var awsRegion = tmp[3]
+    var restApiId = apiGatewayArnTmp[0]
+    var stage = apiGatewayArnTmp[1]
+    var apiArn = 'arn:aws:execute-api:' + awsRegion + ':' + awsAccountId + ':' + restApiId + '/' + stage + '/*/*'
+
     callback(null, {
         principalId: 'user',
         policyDocument: {
@@ -19,7 +27,7 @@ exports.handler = function (event, context, callback) {
             Statement: [{
                 Action: 'execute-api:Invoke',
                 Effect: "Allow",
-                Resource: event.methodArn
+                Resource: apiArn
             }]
         }
     });

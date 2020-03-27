@@ -1,0 +1,223 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+# https://s3.amazonaws.com/cloudformation.jsonize.com/apigateway-lambda-proxy-alarms.yaml
+
+Description: Resources for setting up alarms for an api gateway with a lambda proxy backend.
+
+
+Parameters:
+
+  ResourceName:
+    Type: String
+    Description: The resource name
+
+  CloudWatchTopic:
+    Type: String
+    Description: Cloud Watch SNS Topic and Alarms
+
+  APIGatewayStage:
+    Type: String
+    Description: Stage to monitor
+    Default: production
+
+
+Resources:
+
+  WatchGatewayLatency:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Join [ "-", [ !Ref ResourceName, "Latency" ]]
+      AlarmDescription: !Join [ "-", [ !Ref ResourceName, "Latency" ]]
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref CloudWatchTopic
+      OKActions:
+        - !Ref CloudWatchTopic
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 1
+      TreatMissingData: ignore
+      ComparisonOperator: GreaterThanUpperThreshold
+      ThresholdMetricId: ad1
+      Metrics:
+        - Expression: ANOMALY_DETECTION_BAND(m1, 10)
+          Id: ad1
+        - Id: m1
+          MetricStat:
+            Metric:
+              MetricName: Latency
+              Namespace: AWS/ApiGateway
+              Dimensions:
+                - Name: ApiName
+                  Value: !Ref ResourceName
+                - Name: Stage
+                  Value: !Ref APIGatewayStage
+            Period: 900
+            Stat: Average
+
+  WatchGatewayIntegrationLatency:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Join [ "-", [ !Ref ResourceName, "IntegrationLatency" ]]
+      AlarmDescription: !Join [ "-", [ !Ref ResourceName, "IntegrationLatency" ]]
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref CloudWatchTopic
+      OKActions:
+        - !Ref CloudWatchTopic
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 1
+      TreatMissingData: ignore
+      ComparisonOperator: GreaterThanUpperThreshold
+      ThresholdMetricId: ad1
+      Metrics:
+        - Expression: ANOMALY_DETECTION_BAND(m1, 10)
+          Id: ad1
+        - Id: m1
+          MetricStat:
+            Metric:
+              MetricName: IntegrationLatency
+              Namespace: AWS/ApiGateway
+              Dimensions:
+                - Name: ApiName
+                  Value: !Ref ResourceName
+                - Name: Stage
+                  Value: !Ref APIGatewayStage
+            Period: 900
+            Stat: Average
+
+  WatchGateway4XXError:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Join [ "-", [ !Ref ResourceName, "4XXError" ]]
+      AlarmDescription: !Join [ "-", [ !Ref ResourceName, "4XXError" ]]
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref CloudWatchTopic
+      OKActions:
+        - !Ref CloudWatchTopic
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 1
+      TreatMissingData: ignore
+      ComparisonOperator: GreaterThanUpperThreshold
+      ThresholdMetricId: ad1
+      Metrics:
+        - Expression: ANOMALY_DETECTION_BAND(m1, 10)
+          Id: ad1
+        - Id: m1
+          MetricStat:
+            Metric:
+              MetricName: 4XXError
+              Namespace: AWS/ApiGateway
+              Dimensions:
+                - Name: ApiName
+                  Value: !Ref ResourceName
+                - Name: Stage
+                  Value: !Ref APIGatewayStage
+            Period: 900
+            Stat: Sum
+
+  WatchGateway5XXError:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Join [ "-", [ !Ref ResourceName, "5XXError" ]]
+      AlarmDescription: !Join [ "-", [ !Ref ResourceName, "5XXError" ]]
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref CloudWatchTopic
+      OKActions:
+        - !Ref CloudWatchTopic
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 1
+      TreatMissingData: ignore
+      ComparisonOperator: GreaterThanThreshold
+      MetricName: 5XXError
+      Namespace: AWS/ApiGateway
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref ResourceName
+        - Name: Stage
+          Value: !Ref APIGatewayStage
+      Statistic: Sum
+      Period: 60
+      Threshold: 10
+
+  WatchLambdaErrors:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Join [ "-", [ !Ref ResourceName, "Errors" ]]
+      AlarmDescription: !Join [ "-", [ !Ref ResourceName, "Errors" ]]
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref CloudWatchTopic
+      OKActions:
+        - !Ref CloudWatchTopic
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 1
+      TreatMissingData: ignore
+      ComparisonOperator: GreaterThanThreshold
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ResourceName
+      Statistic: Sum
+      Period: 60
+      Threshold: 10
+
+  WatchLambdaDuration:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Join [ "-", [ !Ref ResourceName, "Duration" ]]
+      AlarmDescription: !Join [ "-", [ !Ref ResourceName, "Duration" ]]
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref CloudWatchTopic
+      OKActions:
+        - !Ref CloudWatchTopic
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 1
+      TreatMissingData: ignore
+      ComparisonOperator: GreaterThanUpperThreshold
+      ThresholdMetricId: ad1
+      Metrics:
+        - Expression: ANOMALY_DETECTION_BAND(m1, 10)
+          Id: ad1
+        - Id: m1
+          MetricStat:
+            Metric:
+              MetricName: Duration
+              Namespace: AWS/Lambda
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref ResourceName
+            Period: 900
+            Stat: Average
+
+  WatchLambdaConcurrency:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Join [ "-", [ !Ref ResourceName, "Concurrency" ]]
+      AlarmDescription: !Join [ "-", [ !Ref ResourceName, "Concurrency" ]]
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref CloudWatchTopic
+      OKActions:
+        - !Ref CloudWatchTopic
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 1
+      TreatMissingData: ignore
+      ComparisonOperator: GreaterThanUpperThreshold
+      ThresholdMetricId: ad1
+      Metrics:
+        - Expression: ANOMALY_DETECTION_BAND(m1, 20)
+          Id: ad1
+        - Id: m1
+          MetricStat:
+            Metric:
+              MetricName: ConcurrentExecutions
+              Namespace: AWS/Lambda
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref ResourceName
+            Period: 900
+            Stat: Average

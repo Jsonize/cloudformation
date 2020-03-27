@@ -203,6 +203,14 @@ Resources:
               if (!(username === process.env.BASIC_AUTH_USER && password === process.env.BASIC_AUTH_PASSWORD))
                   return callback('Unauthorized');
           
+              var tmp = event.methodArn.split(':')
+              var apiGatewayArnTmp = tmp[5].split('/')
+              var awsAccountId = tmp[4]
+              var awsRegion = tmp[3]
+              var restApiId = apiGatewayArnTmp[0]
+              var stage = apiGatewayArnTmp[1]
+              var apiArn = 'arn:aws:execute-api:' + awsRegion + ':' + awsAccountId + ':' + restApiId + '/' + stage + '/*/*'
+          
               callback(null, {
                   principalId: 'user',
                   policyDocument: {
@@ -210,7 +218,7 @@ Resources:
                       Statement: [{
                           Action: 'execute-api:Invoke',
                           Effect: "Allow",
-                          Resource: event.methodArn
+                          Resource: apiArn
                       }]
                   }
               });
@@ -262,3 +270,14 @@ Resources:
       AuthorizerUri: !Join [ "", [ "arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/", !GetAtt LambdaAuthorizer.Arn, "/invocations" ] ]
       AuthorizerCredentials: !GetAtt LambdaAuthorizerApiGatewayRole.Arn
       IdentitySource: method.request.header.Authorization
+
+  ApiGatewayBasicAuthResponse:
+    Type: AWS::ApiGateway::GatewayResponse
+    DependsOn:
+      - ApiGatewayApi
+    Properties:
+      ResponseParameters:
+        gatewayresponse.header.WWW-Authenticate: "'Basic'"
+      ResponseType: UNAUTHORIZED
+      RestApiId: !Ref ApiGatewayApi
+      StatusCode: '401'

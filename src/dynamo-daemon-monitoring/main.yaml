@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+# https://s3.amazonaws.com/cloudformation.jsonize.com/dynamo-daemon-monitoring.yaml
+
+Description: Monitor daemons via DynamoDB and CloudWatch Alarms
+
+
+Parameters:
+
+  DynamoDataTable:
+    Type: String
+    Description: The name of the monitoring data table
+    Default: daemon-monitoring-records
+
+  DynamoConfigTable:
+    Type: String
+    Description: The name of the monitoring config table
+    Default: daemon-monitoring-config
+
+  AlarmSNSTopic:
+    Type: String
+    Description: The SNS topic that should be used for alarms
+
+
+Resources:
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: logs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:*
+                Resource:
+                  - arn:aws:logs:*:*:*
+        - PolicyName: dynamo
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:CreateTable
+                  - dynamodb:GetItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                Resource:
+                  - !Join [ "", [ "arn:aws:dynamodb:*:*:table/", !Ref DynamoDataTable ] ]
+                  - !Join [ "", [ "arn:aws:dynamodb:*:*:table/", !Ref DynamoConfigTable ] ]
+        - PolicyName: sns
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource:
+                  - !Join [ "", [ "arn:aws:sns:*:*:", !Ref AlarmSNSTopic ] ]
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - LambdaRole
+    Properties:
+      Code:
+        ZipFile: |
+          {{file-read file:./lambda.py indent:true}}
+      Environment:
+        Variables:
+          DYNAMO_DATA_TABLE: !Ref DynamoDataTable
+          DYNAMO_CONFIG_TABLE: !Ref DynamoConfigTable
+          SNS_TOPIC: !Ref AlarmSNSTopic
+      Handler: index.handler
+      Role: !GetAtt LambdaRole.Arn
+      Runtime: python3.7
+      Timeout: 60

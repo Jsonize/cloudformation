@@ -236,3 +236,14 @@ Resources:
       AuthorizerUri: !Join [ "", [ "arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/", !GetAtt LambdaAuthorizer.Arn, "/invocations" ] ]
       AuthorizerCredentials: !GetAtt LambdaAuthorizerApiGatewayRole.Arn
       IdentitySource: method.request.header.Authorization
+
+  ApiGatewayBasicAuthResponse:
+    Type: AWS::ApiGateway::GatewayResponse
+    DependsOn:
+      - ApiGatewayApi
+    Properties:
+      ResponseParameters:
+        gatewayresponse.header.WWW-Authenticate: "'Basic'"
+      ResponseType: UNAUTHORIZED
+      RestApiId: !Ref ApiGatewayApi
+      StatusCode: '401'

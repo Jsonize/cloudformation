@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+# https://s3.amazonaws.com/cloudformation.jsonize.com/cloudwatch-alarms-to-teams.yaml
+
+Description: Resources for setting up a CloudWatch alarms to teams integration
+
+
+Parameters:
+
+  TopicName:
+    Type: String
+    Description: The SNS topic name
+    Default: TeamsAlarm
+
+  TeamsHookUrl:
+    Type: String
+    Description: The webhook url for Teams
+
+
+Resources:
+
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    DependsOn:
+      - LambdaFunction
+    Properties:
+      DisplayName: !Ref TopicName
+      TopicName: !Ref TopicName
+      Subscription:
+        - Protocol: lambda
+          Endpoint: !GetAtt LambdaFunction.Arn
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+          - Effect: Allow
+            Principal:
+              Service:
+                - sns.amazonaws.com
+            Action:
+              - lambda:InvokeFunction
+      Path: "/"
+      Policies:
+        - PolicyName: logs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:*
+                Resource:
+                  - arn:aws:logs:*:*:*
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - LambdaRole
+    Properties:
+      Code:
+        ZipFile: |
+          {{file-read file:./lambda.py indent:true}}
+      Environment:
+        Variables:
+          HOOK_URL: !Ref TeamsHookUrl
+      Handler: index.handler
+      Role: !GetAtt LambdaRole.Arn
+      Runtime: python3.7
+      Timeout: 60

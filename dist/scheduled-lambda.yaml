@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+# https://s3.amazonaws.com/cloudformation.jsonize.com/scheduled-lambda.yaml
+
+Description: Resources for setting up a scheduled lambda function.
+
+
+Parameters:
+
+  LambdaFunctionArn:
+    Type: String
+    Description: The lambda function arn
+
+  ScheduleName:
+    Type: String
+    Description: The name of the schedule
+
+  ScheduleExpression:
+    Type: String
+    Description: Schedule expression, e.g. 'rate(6 hours)'
+
+  LambdaInput:
+    Type: String
+    Description: Optional lambda input (JSON)
+    Default: ""
+
+Conditions:
+  HasLambdaInput: !Not [ !Equals ["", !Ref LambdaInput]]
+
+
+Resources:
+
+  ScheduledLambdaEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Ref ScheduleName
+      ScheduleExpression: !Ref ScheduleExpression
+      State: ENABLED
+      Targets:
+        - Id: IdScheduledLambda
+          Arn: !Ref LambdaFunctionArn
+          Input: !If [HasLambdaInput, !Ref LambdaInput, !Ref "AWS::NoValue"]
+
+  ScheduledLambdaPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - ScheduledLambdaEventRule
+    Properties:
+      FunctionName: !Ref LambdaFunctionArn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ScheduledLambdaEventRule.Arn
