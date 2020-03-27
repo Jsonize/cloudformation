@@ -42,12 +42,6 @@ Resources:
                 - lambda.amazonaws.com
             Action:
               - sts:AssumeRole
-          - Effect: Allow
-            Principal:
-              Service:
-                - sns.amazonaws.com
-            Action:
-              - lambda:InvokeFunction
       Path: "/"
       Policies:
         - PolicyName: logs
@@ -140,3 +134,12 @@ Resources:
       Role: !GetAtt LambdaRole.Arn
       Runtime: python3.7
       Timeout: 60
+
+  LambdaSNSPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - LambdaFunction
+    Properties:
+      FunctionName: !GetAtt LambdaFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com

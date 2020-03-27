@@ -19,7 +19,12 @@ Parameters:
 
   AlarmSNSTopic:
     Type: String
-    Description: The SNS topic that should be used for alarms
+    Description: The SNS topic ARN that should be used for alarms
+
+  ScheduleExpression:
+    Type: String
+    Description: Schedule expression, e.g. 'rate(6 hours)'
+    Default: rate(15 minutes)
 
 
 Resources:
@@ -68,7 +73,7 @@ Resources:
                 Action:
                   - sns:Publish
                 Resource:
-                  - !Join [ "", [ "arn:aws:sns:*:*:", !Ref AlarmSNSTopic ] ]
+                  - !Ref AlarmSNSTopic
 
   LambdaFunction:
     Type: AWS::Lambda::Function
@@ -77,133 +82,57 @@ Resources:
     Properties:
       Code:
         ZipFile: |
-          import boto3
-          import os
+          _A='date'
+          import boto3,os
           from botocore.exceptions import ClientError
           from boto3.dynamodb.conditions import Key
-          import re
-          import datetime
-          import json
-          
-          
-          def parseDuration(s):
-              durationMap = {
-                  "second": 1,
-                  "minute": 60,
-                  "hour": 60 * 60,
-                  "day": 24 * 60 * 60,
-                  "week": 7 * 24 * 60 * 60,
-                  "month": 30 * 24* 60 * 60
-              }
-              duration = re.compile('(\d+)\s+([a-z]+[^s])s?').match(s)
-              return int(duration.group(1)) * durationMap[duration.group(2)]
-          
+          import re,datetime,json
+          def parseDuration(s):B={'second':1,'minute':60,'hour':60*60,'day':24*60*60,'week':7*24*60*60,'month':30*24*60*60};A=re.compile('(\\d+)\\s+([a-z]+[^s])s?').match(s);return int(A.group(1))*B[A.group(2)]
           def parseLastInvocation(s):
-              rate = re.compile('rate\((.*)\)').match(s)
-              if rate != None :
-                  return datetime.datetime.now() - datetime.timedelta(seconds=parseDuration(rate.group(1)))
-              cron = re.compile('cron\((.*)\)').match(s)
-              if cron != None :
-                  # TODO
-                  return None
-                  # return parseCron(cron)
-              return None
-          
-          
-          def getTable(db, name, hashKey, rangeKey = None):
-              try:
-                  keySchema = [{
-                      'AttributeName': hashKey,
-                      'KeyType': 'HASH'
-                  }]
-                  attributeDefinitions = [{
-                     'AttributeName': hashKey,
-                     'AttributeType': 'S'
-                 }]
-                  if rangeKey != None :
-                      keySchema.append({
-                          'AttributeName': 'date',
-                          'KeyType': 'RANGE'
-                      })
-                      attributeDefinitions.append({
-                          'AttributeName': 'date',
-                          'AttributeType': 'S'
-                      })
-                  return db.create_table(
-                      TableName=name,
-                      KeySchema=keySchema,
-                      AttributeDefinitions=attributeDefinitions,
-                      BillingMode='PAY_PER_REQUEST'
-                  )
-              except ClientError:
-                  return db.Table(name)
-          
-          
-          def handler(event, context):
-              db = boto3.resource('dynamodb')
-              sns = boto3.client('sns')
-          
-              dataTable = getTable(db, os.environ['DYNAMO_DATA_TABLE'], 'daemonName', 'date')
-              configTable = getTable(db, os.environ['DYNAMO_CONFIG_TABLE'], 'daemonName')
-              snsTopic = os.environ['SNS_TOPIC']
-          
-              configItems = configTable.scan()
-              for configItem in configItems['Items'] :
-                  print(configItem)
-                  daemonName = configItem['daemonName']
-                  minInvocations = configItem['minInvocations']
-                  thresholdStart = parseDuration(configItem['thresholdStart'])
-                  timeoutEnd = parseDuration(configItem['timeoutEnd'])
-                  schedule = parseLastInvocation(configItem['schedule'])
-                  print(schedule.isoformat())
-                  dataItems = dataTable.query(KeyConditionExpression=Key('daemonName').eq(daemonName) & Key('date').gte(schedule.isoformat()))
-                  contexts = {}
-                  for dataItem in dataItems['Items'] :
-                      if "context" in dataItem :
-                          if not (dataItem['context'] in contexts) :
-                              contexts[dataItem['context']] = {}
-                          context = contexts[dataItem['context']]
-                      else :
-                          if not ('default' in contexts) :
-                              contexts['default'] = {}
-                          context = contexts['default']
-                      if not (dataItem['invocation'] in context) :
-                          context[dataItem['invocation']] = {'success': 0, 'timeout': 0, 'pending': None}
-                      invocation = context[dataItem['invocation']]
-                      invocationDate = datetime.datetime.strptime(dataItem['date'], "%Y-%m-%dT%H:%M:%S")
-                      if dataItem['state'] == "start" :
-                          if invocation['pending'] == None :
-                              if invocationDate <= schedule + datetime.timedelta(seconds=thresholdStart) :
-                                  invocation['pending'] = invocationDate
-                          else :
-                              invocation['timeout'] += 1
-                      if dataItem['state'] == "stop" and invocation['pending'] != None :
-                          if invocationDate <= invocation['pending'] + datetime.timedelta(seconds=timeoutEnd) :
-                              invocation['success'] += 1
-                          else :
-                              invocation['timeout'] += 1
-                          invocation['pending'] = None
-                  for ctxKey,invRec in contexts.items() :
-                      counter = 0
-                      for invKey,invVal in invRec.items() :
-                          counter += invVal['success']
-                      contexts[ctxKey] = counter
-                  if not contexts :
-                      contexts['default'] = 0
-                  for ctx, counter in contexts.items() :
-                      print(daemonName + " " + ctx + ": " + str(counter))
-                      if counter < minInvocations :
-                          print("ALARM " + daemonName + " " + ctx + ": " + str(counter))
-                          sns.publish(
-                              TopicArn=snsTopic,
-                              Message=json.dumps({
-                                  'AlarmName': daemonName + " " + ctx,
-                                  'OldStateValue': "UNKNOWN",
-                                  'NewStateValue': "ALARM",
-                                  'NewStateReason': "ALARM " + daemonName + " " + ctx + ": " + str(counter)
-                              }),
-                              Subject="ALARM " + daemonName + " " + ctx + ": " + str(counter)
-                          )
+          	A=re.compile('rate\\((.*)\\)').match(s)
+          	if A!=None:return datetime.datetime.now()-datetime.timedelta(seconds=parseDuration(A.group(1)))
+          	B=re.compile('cron\\((.*)\\)').match(s)
+          	if B!=None:return None
+          	return None
+          def getTable(db,name,hashKey,rangeKey=None):
+          	G='AttributeType';F='S';E='KeyType';B=hashKey;A='AttributeName'
+          	try:
+          		C=[{A:B,E:'HASH'}];D=[{A:B,G:F}]
+          		if rangeKey!=None:C.append({A:_A,E:'RANGE'});D.append({A:_A,G:F})
+          		return db.create_table(TableName=name,KeySchema=C,AttributeDefinitions=D,BillingMode='PAY_PER_REQUEST')
+          	except ClientError:return db.Table(name)
+          def handler(event,context):
+          	j='Items';i='contexts';h='state';U='ALARM ';T='timeout';S='invocation';R='success';P=': ';O='daemonName';N='context';K=' ';J='default';I='pending';H=context;Q=boto3.resource('dynamodb');V=boto3.client('sns');W=getTable(Q,os.environ['DYNAMO_DATA_TABLE'],O,_A);X=getTable(Q,os.environ['DYNAMO_CONFIG_TABLE'],O);Y=os.environ['SNS_TOPIC'];Z=X.scan()
+          	for C in Z[j]:
+          		print C;G=C[O];a=C['minInvocations'];b=parseDuration(C['thresholdStart']);c=parseDuration(C['timeoutEnd']);L=parseLastInvocation(C['schedule']);print L.isoformat();d=W.query(KeyConditionExpression=Key(O).eq(G)&Key(_A).gte(L.isoformat()));A={}
+          		if C[i]:
+          			for F in C[i]:A[F]={}
+          		else:A[J]={}
+          		for B in d[j]:
+          			if N in B:
+          				if not B[N]in A:A[B[N]]={}
+          				H=A[B[N]]
+          			else:
+          				if not J in A:A[J]={}
+          				H=A[J]
+          			if not B[S]in H:H[B[S]]={R:0,T:0,I:None}
+          			D=H[B[S]];M=datetime.datetime.strptime(B[_A],'%Y-%m-%dT%H:%M:%S')
+          			if B[h]=='start':
+          				if D[I]==None:
+          					if M<=L+datetime.timedelta(seconds=b):D[I]=M
+          				else:D[T]+=1
+          			if B[h]=='stop'and D[I]!=None:
+          				if M<=D[I]+datetime.timedelta(seconds=c):D[R]+=1
+          				else:D[T]+=1
+          				D[I]=None
+          		for (e,f) in A.items():
+          			E=0
+          			for (k,g) in f.items():E+=g[R]
+          			A[e]=E
+          		if not A:A[J]=0
+          		for (F,E) in A.items():
+          			print G+K+F+P+str(E)
+          			if E<a:print U+G+K+F+P+str(E);V.publish(TopicArn=Y,Message=json.dumps({'AlarmName':G+K+F,'OldStateValue':'UNKNOWN','NewStateValue':'ALARM','NewStateReason':U+G+K+F+P+str(E)}),Subject=U+G+K+F+P+str(E))
       Environment:
         Variables:
           DYNAMO_DATA_TABLE: !Ref DynamoDataTable
@@ -213,3 +142,22 @@ Resources:
       Role: !GetAtt LambdaRole.Arn
       Runtime: python3.7
       Timeout: 60
+
+  ScheduledLambdaEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: !Ref ScheduleExpression
+      State: ENABLED
+      Targets:
+        - Id: IdScheduledLambda
+          Arn: !GetAtt LambdaFunction.Arn
+
+  ScheduledLambdaPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - ScheduledLambdaEventRule
+    Properties:
+      FunctionName: !GetAtt LambdaFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ScheduledLambdaEventRule.Arn

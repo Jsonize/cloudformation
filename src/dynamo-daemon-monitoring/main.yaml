@@ -19,7 +19,12 @@ Parameters:
 
   AlarmSNSTopic:
     Type: String
-    Description: The SNS topic that should be used for alarms
+    Description: The SNS topic ARN that should be used for alarms
+
+  ScheduleExpression:
+    Type: String
+    Description: Schedule expression, e.g. 'rate(6 hours)'
+    Default: rate(15 minutes)
 
 
 Resources:
@@ -68,7 +73,7 @@ Resources:
                 Action:
                   - sns:Publish
                 Resource:
-                  - !Join [ "", [ "arn:aws:sns:*:*:", !Ref AlarmSNSTopic ] ]
+                  - !Ref AlarmSNSTopic
 
   LambdaFunction:
     Type: AWS::Lambda::Function
@@ -77,7 +82,7 @@ Resources:
     Properties:
       Code:
         ZipFile: |
-          {{file-read file:./lambda.py indent:true}}
+          {{command-run cmd:pyminify arg1:./lambda.py indent:true}}
       Environment:
         Variables:
           DYNAMO_DATA_TABLE: !Ref DynamoDataTable
@@ -87,3 +92,22 @@ Resources:
       Role: !GetAtt LambdaRole.Arn
       Runtime: python3.7
       Timeout: 60
+
+  ScheduledLambdaEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: !Ref ScheduleExpression
+      State: ENABLED
+      Targets:
+        - Id: IdScheduledLambda
+          Arn: !GetAtt LambdaFunction.Arn
+
+  ScheduledLambdaPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - ScheduledLambdaEventRule
+    Properties:
+      FunctionName: !GetAtt LambdaFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ScheduledLambdaEventRule.Arn

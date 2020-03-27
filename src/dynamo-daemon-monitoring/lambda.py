@@ -79,6 +79,11 @@ def handler(event, context):
         print(schedule.isoformat())
         dataItems = dataTable.query(KeyConditionExpression=Key('daemonName').eq(daemonName) & Key('date').gte(schedule.isoformat()))
         contexts = {}
+        if configItem['contexts'] :
+            for ctx in configItem['contexts']:
+                contexts[ctx] = {}
+        else :
+            contexts["default"] = {}
         for dataItem in dataItems['Items'] :
             if "context" in dataItem :
                 if not (dataItem['context'] in contexts) :
