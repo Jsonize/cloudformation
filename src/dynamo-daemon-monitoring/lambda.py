@@ -30,6 +30,8 @@ def parseLastInvocation(s):
         # return parseCron(cron)
     return None
 
+def log(s):
+    print(s)
 
 def getTable(db, name, hashKey, rangeKey = None):
     try:
@@ -70,7 +72,7 @@ def handler(event, context):
 
     configItems = configTable.scan()
     for configItem in configItems['Items'] :
-        print(configItem)
+        log(configItem)
         daemonName = configItem['daemonName']
         minInvocations = configItem['minInvocations']
         thresholdStart = parseDuration(configItem['thresholdStart'])
@@ -117,9 +119,9 @@ def handler(event, context):
         if not contexts :
             contexts['default'] = 0
         for ctx, counter in contexts.items() :
-            print(daemonName + " " + ctx + ": " + str(counter))
+            log(daemonName + " " + ctx + ": " + str(counter))
             if counter < minInvocations :
-                print("ALARM " + daemonName + " " + ctx + ": " + str(counter))
+                log("ALARM " + daemonName + " " + ctx + ": " + str(counter))
                 sns.publish(
                     TopicArn=snsTopic,
                     Message=json.dumps({
