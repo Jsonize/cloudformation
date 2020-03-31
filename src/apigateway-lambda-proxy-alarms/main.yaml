@@ -101,7 +101,7 @@ Resources:
       ComparisonOperator: GreaterThanUpperThreshold
       ThresholdMetricId: ad1
       Metrics:
-        - Expression: ANOMALY_DETECTION_BAND(m1, 50)
+        - Expression: ANOMALY_DETECTION_BAND(m1, 100)
           Id: ad1
         - Id: m1
           MetricStat:
@@ -113,7 +113,7 @@ Resources:
                   Value: !Ref ResourceName
                 - Name: Stage
                   Value: !Ref APIGatewayStage
-            Period: 900
+            Period: 3600
             Stat: Sum
 
   WatchGateway5XXError:
@@ -180,7 +180,7 @@ Resources:
       ComparisonOperator: GreaterThanUpperThreshold
       ThresholdMetricId: ad1
       Metrics:
-        - Expression: ANOMALY_DETECTION_BAND(m1, 10)
+        - Expression: ANOMALY_DETECTION_BAND(m1, 25)
           Id: ad1
         - Id: m1
           MetricStat:
