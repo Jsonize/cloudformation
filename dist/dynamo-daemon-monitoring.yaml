@@ -105,7 +105,7 @@ Resources:
           def handler(event,context):
           	j='Items';i='contexts';h='state';U='ALARM ';T='timeout';S='invocation';R='success';P=': ';O='daemonName';N='context';K=' ';J='default';I='pending';H=context;Q=boto3.resource('dynamodb');V=boto3.client('sns');W=getTable(Q,os.environ['DYNAMO_DATA_TABLE'],O,_A);X=getTable(Q,os.environ['DYNAMO_CONFIG_TABLE'],O);Y=os.environ['SNS_TOPIC'];Z=X.scan()
           	for C in Z[j]:
-          		log(C);G=C[O];a=C['minInvocations'];b=parseDuration(C['thresholdStart']);c=parseDuration(C['timeoutEnd']);L=parseLastInvocation(C['schedule']);print L.isoformat();d=W.query(KeyConditionExpression=Key(O).eq(G)&Key(_A).gte(L.isoformat()));A={}
+          		log(C);G=C[O];a=C['minInvocations'];b=parseDuration(C['thresholdStart']);c=parseDuration(C['timeoutEnd']);L=parseLastInvocation(C['schedule'])-datetime.timedelta(seconds=parseDuration(rate.group(1)));print L.isoformat();d=W.query(KeyConditionExpression=Key(O).eq(G)&Key(_A).gte(L.isoformat()));A={}
           		if C[i]:
           			for F in C[i]:A[F]={}
           		else:A[J]={}
@@ -117,7 +117,7 @@ Resources:
           				if not J in A:A[J]={}
           				H=A[J]
           			if not B[S]in H:H[B[S]]={R:0,T:0,I:None}
-          			D=H[B[S]];M=datetime.datetime.strptime(B[_A],'%Y-%m-%dT%H:%M:%S')
+          			D=H[B[S]];M=datetime.datetime.strptime(B[_A].split('~',1)[0],'%Y-%m-%dT%H:%M:%S')
           			if B[h]=='start':
           				if D[I]==None:
           					if M<=L+datetime.timedelta(seconds=b):D[I]=M

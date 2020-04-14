@@ -101,7 +101,7 @@ Resources:
       ComparisonOperator: GreaterThanUpperThreshold
       ThresholdMetricId: ad1
       Metrics:
-        - Expression: ANOMALY_DETECTION_BAND(m1, 100)
+        - Expression: ANOMALY_DETECTION_BAND(m1, 25)
           Id: ad1
         - Id: m1
           MetricStat:
@@ -113,8 +113,8 @@ Resources:
                   Value: !Ref ResourceName
                 - Name: Stage
                   Value: !Ref APIGatewayStage
-            Period: 3600
-            Stat: Sum
+            Period: 900
+            Stat: Average
 
   WatchGateway5XXError:
     Type: AWS::CloudWatch::Alarm

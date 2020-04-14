@@ -77,7 +77,7 @@ def handler(event, context):
         minInvocations = configItem['minInvocations']
         thresholdStart = parseDuration(configItem['thresholdStart'])
         timeoutEnd = parseDuration(configItem['timeoutEnd'])
-        schedule = parseLastInvocation(configItem['schedule'])
+        schedule = parseLastInvocation(configItem['schedule']) - datetime.timedelta(seconds=parseDuration(rate.group(1)))
         print(schedule.isoformat())
         dataItems = dataTable.query(KeyConditionExpression=Key('daemonName').eq(daemonName) & Key('date').gte(schedule.isoformat()))
         contexts = {}
@@ -98,7 +98,7 @@ def handler(event, context):
             if not (dataItem['invocation'] in context) :
                 context[dataItem['invocation']] = {'success': 0, 'timeout': 0, 'pending': None}
             invocation = context[dataItem['invocation']]
-            invocationDate = datetime.datetime.strptime(dataItem['date'], "%Y-%m-%dT%H:%M:%S")
+            invocationDate = datetime.datetime.strptime(dataItem['date'].split("~", 1)[0], "%Y-%m-%dT%H:%M:%S")
             if dataItem['state'] == "start" :
                 if invocation['pending'] == None :
                     if invocationDate <= schedule + datetime.timedelta(seconds=thresholdStart) :

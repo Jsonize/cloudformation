@@ -46,6 +46,7 @@ Resources:
         - multipart/form-data
         - application/octet-stream
         - application/pdf
+        - application/force-download
       Body:
         swagger: 2.0
         info:
