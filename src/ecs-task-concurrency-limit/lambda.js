@@ -44,6 +44,7 @@ exports.handler = (event, context, callback) => {
                 console.log(err);
                 return;
             }
+            console.log("Found Tasks", data);
             var runningWithoutCurrent = data.taskArns.filter(function (arn) {
                 return arn !== event.detail.taskArn;
             }).length;
