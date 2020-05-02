@@ -70,15 +70,22 @@ def handler(event, context):
     configTable = getTable(db, os.environ['DYNAMO_CONFIG_TABLE'], 'daemonName')
     snsTopic = os.environ['SNS_TOPIC']
 
-    configItems = configTable.scan()
-    for configItem in configItems['Items'] :
+    response = configTable.scan()
+    configItems = response['Items']
+    while 'LastEvaluatedKey' in response:
+        response = configTable.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+        configItems.extend(response['Items'])
+
+    for configItem in configItems :
+        if ("enabled" in configItem) and not (configItem['enabled']):
+            continue
         log(configItem)
         daemonName = configItem['daemonName']
         minInvocations = configItem['minInvocations']
         thresholdStart = parseDuration(configItem['thresholdStart'])
         timeoutEnd = parseDuration(configItem['timeoutEnd'])
-        schedule = parseLastInvocation(configItem['schedule']) - datetime.timedelta(seconds=parseDuration(rate.group(1)))
-        print(schedule.isoformat())
+        schedule = parseLastInvocation(configItem['schedule'])
+        #log(schedule.isoformat())
         dataItems = dataTable.query(KeyConditionExpression=Key('daemonName').eq(daemonName) & Key('date').gte(schedule.isoformat()))
         contexts = {}
         if configItem['contexts'] :
@@ -86,7 +93,12 @@ def handler(event, context):
                 contexts[ctx] = {}
         else :
             contexts["default"] = {}
-        for dataItem in dataItems['Items'] :
+        items = dataItems['Items']
+        for dataItem in items:
+            dataItem['date'] = dataItem['date'].split("~", 1)[0]
+            dataItem['sortkey'] = dataItem['date'] + "~" + dataItem['state']
+        items.sort(key=lambda x:x['sortkey'])
+        for dataItem in items :
             if "context" in dataItem :
                 if not (dataItem['context'] in contexts) :
                     contexts[dataItem['context']] = {}
@@ -98,7 +110,7 @@ def handler(event, context):
             if not (dataItem['invocation'] in context) :
                 context[dataItem['invocation']] = {'success': 0, 'timeout': 0, 'pending': None}
             invocation = context[dataItem['invocation']]
-            invocationDate = datetime.datetime.strptime(dataItem['date'].split("~", 1)[0], "%Y-%m-%dT%H:%M:%S")
+            invocationDate = datetime.datetime.strptime(dataItem['date'], "%Y-%m-%dT%H:%M:%S")
             if dataItem['state'] == "start" :
                 if invocation['pending'] == None :
                     if invocationDate <= schedule + datetime.timedelta(seconds=thresholdStart) :
