@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+
+# https://s3.amazonaws.com/cloudformation.jsonize.com/cloudfront-s3-viewer-lambda-edge.yaml
+
+
+Description: Resources for an S3-CDN with a viewer edge lambda function.
+
+
+Parameters:
+
+  AcmCertificateArn:
+    Type: String
+    Description: The ARN of the SSL certificate to use for the CloudFront distribution.
+
+  LambdaFunctionArn:
+    Type: String
+    Description: The ARN of the Lambda function to use as viewer request.
+
+  ZoneDomain:
+    Type: String
+    Description: The zone domain for the resource
+
+  SubDomain:
+    Type: String
+    Description: The sub domain for the system
+
+  S3BucketArn:
+    Type: String
+    Description: The s3 bucket.
+
+
+Resources:
+
+  TheCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    DependsOn:
+      - TheCloudFrontOriginAccessIdentity
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
+        CacheBehaviors:
+          - PathPattern: /*
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            Compress: true
+            ForwardedValues:
+              QueryString: false
+              Cookies:
+                Forward: none
+              Headers:
+                - Access-Control-Request-Headers
+                - Access-Control-Request-Methods
+            LambdaFunctionAssociations:
+              - EventType: viewer-request
+                LambdaFunctionARN: !Ref LambdaFunctionArn
+            TargetOriginId: TheS3Bucket
+        DefaultCacheBehavior:
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+            Headers:
+              - Access-Control-Request-Headers
+              - Access-Control-Request-Methods
+          TargetOriginId: TheS3Bucket
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 403
+            ResponsePagePath: /errors/403.html
+          - ErrorCode: 404
+            ResponseCode: 404
+            ResponsePagePath: /errors/404.html
+        Enabled: true
+        HttpVersion: http2
+        Origins:
+          - DomainName: !Join [ "", [ !Ref S3BucketArn, ".s3.amazonaws.com" ] ]
+            Id: TheS3Bucket
+            S3OriginConfig:
+              OriginAccessIdentity: !Join [ "", [ "origin-access-identity/cloudfront/", !Ref TheCloudFrontOriginAccessIdentity ] ]
+        PriceClass: PriceClass_All
+        ViewerCertificate:
+          AcmCertificateArn: !Ref AcmCertificateArn
+          MinimumProtocolVersion: TLSv1.1_2016
+          SslSupportMethod: sni-only
+      Tags:
+        - Key: Domain
+          Value: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
+
+  TheCloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Join [ "", [ "CloudFront OAI for ", !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ] ] ]
+
+  TheRoute53CloudfrontEntry:
+    Type: AWS::Route53::RecordSet
+    DependsOn:
+      - TheCloudFrontDistribution
+    Properties:
+      HostedZoneName: !Join [ "", [ !Ref ZoneDomain, "." ] ]
+      Name: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
+      Type: CNAME
+      TTL: '900'
+      ResourceRecords:
+        - !GetAtt TheCloudFrontDistribution.DomainName

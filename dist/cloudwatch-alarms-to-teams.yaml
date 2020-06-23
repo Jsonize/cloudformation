@@ -19,16 +19,15 @@ Parameters:
 
 Resources:
 
-  SNSTopic:
-    Type: AWS::SNS::Topic
+  SnsToLambda:
+    Type: AWS::CloudFormation::Stack
     DependsOn:
       - LambdaFunction
     Properties:
-      DisplayName: !Ref TopicName
-      TopicName: !Ref TopicName
-      Subscription:
-        - Protocol: lambda
-          Endpoint: !GetAtt LambdaFunction.Arn
+      TemplateURL: https://s3.amazonaws.com/cloudformation.jsonize.com/sns-to-lambda.yaml
+      Parameters:
+        TopicName: !Ref TopicName
+        LambdaFunctionArn: !GetAtt LambdaFunction.Arn
 
   LambdaRole:
     Type: AWS::IAM::Role
@@ -134,12 +133,3 @@ Resources:
       Role: !GetAtt LambdaRole.Arn
       Runtime: python3.7
       Timeout: 60
-
-  LambdaSNSPermission:
-    Type: AWS::Lambda::Permission
-    DependsOn:
-      - LambdaFunction
-    Properties:
-      FunctionName: !GetAtt LambdaFunction.Arn
-      Action: lambda:InvokeFunction
-      Principal: sns.amazonaws.com

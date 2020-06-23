@@ -103,42 +103,39 @@ Resources:
           		return db.create_table(TableName=name,KeySchema=C,AttributeDefinitions=D,BillingMode='PAY_PER_REQUEST')
           	except ClientError:return db.Table(name)
           def handler(event,context):
-          	p='contexts';o='sortkey';n='enabled';m='~';l='LastEvaluatedKey';a='ALARM ';Z='timeout';Y='Items';X='invocation';W='success';V='state';Q=': ';P='daemonName';O='context';L=' ';K='default';J='pending';H=context;R=boto3.resource('dynamodb');b=boto3.client('sns');c=getTable(R,os.environ['DYNAMO_DATA_TABLE'],P,_A);S=getTable(R,os.environ['DYNAMO_CONFIG_TABLE'],P);d=os.environ['SNS_TOPIC'];I=S.scan();T=I[Y]
-          	while l in I:I=S.scan(ExclusiveStartKey=I[l]);T.extend(I[Y])
-          	for C in T:
-          		if n in C and not C[n]:continue
-          		log(C);G=C[P];e=C['minInvocations'];f=parseDuration(C['thresholdStart']);g=parseDuration(C['timeoutEnd']);U=parseLastInvocation(C['schedule']);h=c.query(KeyConditionExpression=Key(P).eq(G)&Key(_A).gte(U.isoformat()));B={}
-          		if C[p]:
-          			for F in C[p]:B[F]={}
-          		else:B[K]={}
-          		M=h[Y]
-          		for A in M:A[_A]=A[_A].split(m,1)[0];A[o]=A[_A]+m+A[V]
-          		M.sort(key=lambda x:x[o])
-          		for A in M:
-          			if O in A:
-          				if not A[O]in B:B[A[O]]={}
-          				H=B[A[O]]
-          			else:
-          				if not K in B:B[K]={}
-          				H=B[K]
-          			if not A[X]in H:H[A[X]]={W:0,Z:0,J:None}
-          			D=H[A[X]];N=datetime.datetime.strptime(A[_A],'%Y-%m-%dT%H:%M:%S')
-          			if A[V]=='start':
-          				if D[J]==None:
-          					if N<=U+datetime.timedelta(seconds=f):D[J]=N
-          				else:D[Z]+=1
-          			if A[V]=='stop'and D[J]!=None:
-          				if N<=D[J]+datetime.timedelta(seconds=g):D[W]+=1
-          				else:D[Z]+=1
-          				D[J]=None
-          		for (i,j) in B.items():
-          			E=0
-          			for (q,k) in j.items():E+=k[W]
-          			B[i]=E
-          		if not B:B[K]=0
-          		for (F,E) in B.items():
-          			log(G+L+F+Q+str(E))
-          			if E<e:log(a+G+L+F+Q+str(E));b.publish(TopicArn=d,Message=json.dumps({'AlarmName':G+L+F,'OldStateValue':'UNKNOWN','NewStateValue':'ALARM','NewStateReason':a+G+L+F+Q+str(E)}),Subject=a+G+L+F+Q+str(E))
+          	p='timeout';o='contexts';n='sortkey';m='enabled';l='~';k='LastEvaluatedKey';Z='ALARM ';Y='Items';X='invocation';W='context';V='success';U='state';P=': ';O='daemonName';N='default';K='pending';J=' ';H=context;Q=boto3.resource('dynamodb');a=boto3.client('sns');b=getTable(Q,os.environ['DYNAMO_DATA_TABLE'],O,_A);R=getTable(Q,os.environ['DYNAMO_CONFIG_TABLE'],O);c=os.environ['SNS_TOPIC'];I=R.scan();S=I[Y]
+          	while k in I:I=R.scan(ExclusiveStartKey=I[k]);S.extend(I[Y])
+          	for C in S:
+          		if m in C and not C[m]:continue
+          		log(C);F=C[O];d=C['minInvocations'];e=parseDuration(C['thresholdStart']);f=parseDuration(C['timeoutEnd']);T=parseLastInvocation(C['schedule']);g=b.query(KeyConditionExpression=Key(O).eq(F)&Key(_A).gte(T.isoformat()));B={}
+          		if o in C:
+          			for E in C[o]:B[E]={}
+          		else:B[N]={}
+          		L=g[Y]
+          		for A in L:A[_A]=A[_A].split(l,1)[0];A[n]=A[_A]+l+A[U]
+          		L.sort(key=lambda x:x[n])
+          		for A in L:
+          			if not N in B:
+          				if not W in A:continue
+          				if not A[W]in B:continue
+          				H=B[A[W]]
+          			else:H=B[N]
+          			if not A[X]in H:H[A[X]]={V:0,p:0,K:None}
+          			G=H[A[X]];M=datetime.datetime.strptime(A[_A],'%Y-%m-%dT%H:%M:%S')
+          			if A[U]=='start':
+          				if M<=T+datetime.timedelta(seconds=e):G[K]=M
+          			if A[U]=='stop'and G[K]!=None:
+          				if M<=G[K]+datetime.timedelta(seconds=f):G[V]+=1
+          				else:G[p]+=1
+          				G[K]=None
+          		for (h,i) in B.items():
+          			D=0
+          			for (q,j) in i.items():D+=j[V]
+          			B[h]=D
+          		if not B:B[N]=0
+          		for (E,D) in B.items():
+          			log(F+J+E+P+str(D))
+          			if D<d:log(Z+F+J+E+P+str(D));a.publish(TopicArn=c,Message=json.dumps({'AlarmName':F+J+E,'OldStateValue':'UNKNOWN','NewStateValue':'ALARM','NewStateReason':Z+F+J+E+P+str(D)}),Subject=Z+F+J+E+P+str(D))
       Environment:
         Variables:
           DYNAMO_DATA_TABLE: !Ref DynamoDataTable

@@ -88,7 +88,7 @@ def handler(event, context):
         #log(schedule.isoformat())
         dataItems = dataTable.query(KeyConditionExpression=Key('daemonName').eq(daemonName) & Key('date').gte(schedule.isoformat()))
         contexts = {}
-        if configItem['contexts'] :
+        if 'contexts' in configItem:
             for ctx in configItem['contexts']:
                 contexts[ctx] = {}
         else :
@@ -99,24 +99,21 @@ def handler(event, context):
             dataItem['sortkey'] = dataItem['date'] + "~" + dataItem['state']
         items.sort(key=lambda x:x['sortkey'])
         for dataItem in items :
-            if "context" in dataItem :
+            if not ('default' in contexts):
+                if not ("context" in dataItem) :
+                    continue
                 if not (dataItem['context'] in contexts) :
-                    contexts[dataItem['context']] = {}
+                    continue
                 context = contexts[dataItem['context']]
             else :
-                if not ('default' in contexts) :
-                    contexts['default'] = {}
                 context = contexts['default']
             if not (dataItem['invocation'] in context) :
                 context[dataItem['invocation']] = {'success': 0, 'timeout': 0, 'pending': None}
             invocation = context[dataItem['invocation']]
             invocationDate = datetime.datetime.strptime(dataItem['date'], "%Y-%m-%dT%H:%M:%S")
             if dataItem['state'] == "start" :
-                if invocation['pending'] == None :
-                    if invocationDate <= schedule + datetime.timedelta(seconds=thresholdStart) :
-                        invocation['pending'] = invocationDate
-                else :
-                    invocation['timeout'] += 1
+                if invocationDate <= schedule + datetime.timedelta(seconds=thresholdStart) :
+                    invocation['pending'] = invocationDate
             if dataItem['state'] == "stop" and invocation['pending'] != None :
                 if invocationDate <= invocation['pending'] + datetime.timedelta(seconds=timeoutEnd) :
                     invocation['success'] += 1

@@ -35,7 +35,7 @@ exports.handler = (event, context, callback) => {
             cluster: cluster,
             family: family
         };
-        if (taskCountMaxByStartedBy) {
+        if (taskCountMaxByStartedBy && startedBy) {
             listTasksQuery.startedBy = startedBy;
             delete listTasksQuery.family;
         }

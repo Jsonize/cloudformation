@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+# https://s3.amazonaws.com/cloudformation.jsonize.com/sns-to-lambda.yaml
+
+Description: Resources for setting up a CloudWatch alarms to teams integration
+
+
+Parameters:
+
+  TopicName:
+    Type: String
+    Description: The SNS topic name
+
+  LambdaFunctionArn:
+    Type: String
+    Description: The lambda function arn
+
+
+Resources:
+
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: !Ref TopicName
+      TopicName: !Ref TopicName
+      Subscription:
+        - Protocol: lambda
+          Endpoint: !Ref LambdaFunctionArn
+
+  LambdaSNSPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaFunctionArn
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com
