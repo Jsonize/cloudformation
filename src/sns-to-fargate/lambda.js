@@ -1,6 +1,7 @@
 const AWS = require('aws-sdk');
 const ECS = new AWS.ECS({apiVersion: '2014-11-13'});
 const FS = require("fs");
+const Util = require("util");
 
 const tasks = JSON.parse(FS.readFileSync("tasks.json"));
 
@@ -12,12 +13,14 @@ exports.handler = function (event, context, callback) {
     const task = tasks[taskName];
     var commandLine = task.commandLine;
     splt.forEach(function (s, i) {
-        commandLine = commandLine.replace("${" + i + "}", s);
+        //commandLine = commandLine.replace("${" + i + "}", s);
+        commandLine = commandLine.map(function (t) {
+            return t.replace("${" + i + "}", s);
+        });
     });
-    ECS.runTask({
+    var params = {
         cluster: process.env["CLUSTER"],
         taskDefinition: task.taskDefinition,
-        taskCount: 1,
         overrides: {
             containerOverrides: [{
                 command: commandLine,
@@ -33,7 +36,10 @@ exports.handler = function (event, context, callback) {
                 subnets: process.env["SUBNETS"].split(",")
             }
         }
-    }, function (err, data) {
+    };
+    console.log(Util.inspect(params, false, null, true /* enable colors */));
+    ECS.runTask(params, function (err, data) {
         console.log(err);
+        callback(null, "Success");
     });
 };

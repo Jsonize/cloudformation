@@ -68,7 +68,7 @@ Resources:
                   - ecs:RunTask
                   - iam:PassRole
                 Resource:
-                  - *
+                  - '*'
 
   LambdaFunction:
     Type: AWS::Lambda::Function
@@ -81,8 +81,8 @@ Resources:
       Environment:
         Variables:
           CLUSTER: !Ref ClusterName
-          SECURITYGROUP: !ClusterSecurityGroup
-          SUBNETS: !ClusterSubnets
+          SECURITYGROUP: !Ref ClusterSecurityGroup
+          SUBNETS: !Join [ ",", !Ref ClusterSubnets]
       Handler: index.handler
       Role: !GetAtt LambdaRole.Arn
       Runtime: nodejs12.x
