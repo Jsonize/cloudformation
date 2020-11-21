@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+# https://s3.amazonaws.com/cloudformation.jsonize.com/ecs-task-timeout.yaml
+
+Description: Automatically timeout ECS tasks.
+
+
+Parameters:
+
+  ClusterName:
+    Type: String
+    Description: Name of target cluster
+
+  ScheduleExpression:
+    Type: String
+    Description: Schedule expression, e.g. 'rate(6 hours)'
+    Default: rate(15 minutes)
+
+Resources:
+
+  ECSTaskTimeoutLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: logs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:*
+                Resource:
+                  - arn:aws:logs:*:*:*
+        - PolicyName: ecs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:*
+                Resource:
+                  - "*"
+
+  ECSTaskTimeoutLambda:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - ECSTaskTimeoutLambdaRole
+    Properties:
+      Code:
+        ZipFile: |
+          {{file-read file:./lambda.js indent:true}}
+      Environment:
+        Variables:
+          CLUSTER_NAME: !Ref ClusterName
+      Handler: index.handler
+      Role: !GetAtt ECSTaskTimeoutLambdaRole.Arn
+      Runtime: nodejs12.x
+      Timeout: 60
+
+  ECSTaskTimeoutEventRule:
+    Type: AWS::Events::Rule
+    DependsOn:
+      - ECSTaskTimeoutLambda
+    Properties:
+      ScheduleExpression: !Ref ScheduleExpression
+      State: ENABLED
+      Targets:
+        - Id: IdECSTaskTimeoutLambda
+          Arn: !GetAtt ECSTaskTimeoutLambda.Arn
+
+  ECSTaskTimeoutLambdaPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - ECSTaskTimeoutLambda
+      - ECSTaskTimeoutEventRule
+    Properties:
+      FunctionName: !GetAtt ECSTaskTimeoutLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ECSTaskTimeoutEventRule.Arn
+
