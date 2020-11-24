@@ -39,7 +39,7 @@ Resources:
       ComparisonOperator: GreaterThanUpperThreshold
       ThresholdMetricId: ad1
       Metrics:
-        - Expression: ANOMALY_DETECTION_BAND(m1, 10)
+        - Expression: ANOMALY_DETECTION_BAND(m1, 20)
           Id: ad1
         - Id: m1
           MetricStat:
@@ -70,7 +70,7 @@ Resources:
       ComparisonOperator: GreaterThanUpperThreshold
       ThresholdMetricId: ad1
       Metrics:
-        - Expression: ANOMALY_DETECTION_BAND(m1, 10)
+        - Expression: ANOMALY_DETECTION_BAND(m1, 20)
           Id: ad1
         - Id: m1
           MetricStat:
@@ -139,7 +139,7 @@ Resources:
           Value: !Ref APIGatewayStage
       Statistic: Sum
       Period: 60
-      Threshold: 10
+      Threshold: 20
 
   WatchLambdaErrors:
     Type: AWS::CloudWatch::Alarm
@@ -180,7 +180,7 @@ Resources:
       ComparisonOperator: GreaterThanUpperThreshold
       ThresholdMetricId: ad1
       Metrics:
-        - Expression: ANOMALY_DETECTION_BAND(m1, 25)
+        - Expression: ANOMALY_DETECTION_BAND(m1, 50)
           Id: ad1
         - Id: m1
           MetricStat:
