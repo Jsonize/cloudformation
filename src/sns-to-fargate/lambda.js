@@ -5,6 +5,19 @@ const Util = require("util");
 
 const tasks = JSON.parse(FS.readFileSync("tasks.json"));
 
+function exponentialBackoff(f, cb, wait) {
+    wait = wait || 1000;
+    f(function (err, data) {
+        console.log(err, data, wait);
+        if (err) {
+            setTimeout(function () {
+                exponentialBackoff(f, cb, wait * 2);
+            }, wait);
+        } else
+            cb(err, data);
+    })
+}
+
 exports.handler = function (event, context, callback) {
     const message = event.Records[0].Sns.Message;
     console.log(message);
@@ -38,8 +51,7 @@ exports.handler = function (event, context, callback) {
         }
     };
     console.log(Util.inspect(params, false, null, true /* enable colors */));
-    ECS.runTask(params, function (err, data) {
-        console.log(err);
-        callback(null, "Success");
-    });
+    exponentialBackoff(function (cb) {
+        ECS.runTask(params, cb);
+    }, callback);
 };

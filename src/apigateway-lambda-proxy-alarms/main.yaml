@@ -39,7 +39,7 @@ Resources:
       ComparisonOperator: GreaterThanUpperThreshold
       ThresholdMetricId: ad1
       Metrics:
-        - Expression: ANOMALY_DETECTION_BAND(m1, 20)
+        - Expression: ANOMALY_DETECTION_BAND(m1, 25)
           Id: ad1
         - Id: m1
           MetricStat:
