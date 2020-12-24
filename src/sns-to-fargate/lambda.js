@@ -5,13 +5,13 @@ const Util = require("util");
 
 const tasks = JSON.parse(FS.readFileSync("tasks.json"));
 
-function exponentialBackoff(f, cb, wait) {
+function randomExponentialBackoff(f, cb, wait) {
     wait = wait || 1000;
     f(function (err, data) {
         console.log(err, data, wait);
         if (err) {
             setTimeout(function () {
-                exponentialBackoff(f, cb, wait * 2);
+                randomExponentialBackoff(f, cb, Math.round(wait * (1.0 + Math.random())));
             }, wait);
         } else
             cb(err, data);
@@ -51,7 +51,7 @@ exports.handler = function (event, context, callback) {
         }
     };
     console.log(Util.inspect(params, false, null, true /* enable colors */));
-    exponentialBackoff(function (cb) {
+    randomExponentialBackoff(function (cb) {
         ECS.runTask(params, cb);
     }, callback);
 };
