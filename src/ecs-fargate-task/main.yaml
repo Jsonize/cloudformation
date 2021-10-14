@@ -49,6 +49,7 @@ Parameters:
   TaskCountMax:
     Type: String
     Description: Limit the number of concurrent tasks? (empty for no limit)
+    Default: ""
 
   TaskCountMaxByStartedBy:
     Type: String

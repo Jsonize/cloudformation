@@ -22,7 +22,9 @@ exports.handler = function (event, context, callback) {
     const message = event.Records[0].Sns.Message;
     console.log(message);
     const splt = message.split(":");
-    const taskName = splt.shift();
+    const taskNameBase = splt.shift().split(".");
+    const taskName = taskNameBase[0];
+    const taskPostfix = taskNameBase.length > 1 ? (":" + taskNameBase[1]) : "";
     const task = tasks[taskName];
     var commandLine = task.commandLine;
     splt.forEach(function (s, i) {
@@ -33,7 +35,7 @@ exports.handler = function (event, context, callback) {
     });
     var params = {
         cluster: process.env["CLUSTER"],
-        taskDefinition: task.taskDefinition,
+        taskDefinition: task.taskDefinition + taskPostfix,
         overrides: {
             containerOverrides: [{
                 command: commandLine,
