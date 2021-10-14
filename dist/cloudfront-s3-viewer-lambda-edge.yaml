@@ -27,7 +27,7 @@ Parameters:
     Type: String
     Description: The sub domain for the system
 
-  S3BucketArn:
+  S3BucketName:
     Type: String
     Description: The s3 bucket.
 
@@ -86,7 +86,7 @@ Resources:
         Enabled: true
         HttpVersion: http2
         Origins:
-          - DomainName: !Join [ "", [ !Ref S3BucketArn, ".s3.amazonaws.com" ] ]
+          - DomainName: !Join [ "", [ !Ref S3BucketName, ".s3.amazonaws.com" ] ]
             Id: TheS3Bucket
             S3OriginConfig:
               OriginAccessIdentity: !Join [ "", [ "origin-access-identity/cloudfront/", !Ref TheCloudFrontOriginAccessIdentity ] ]
@@ -116,3 +116,19 @@ Resources:
       TTL: '900'
       ResourceRecords:
         - !GetAtt TheCloudFrontDistribution.DomainName
+
+  TheS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DependsOn:
+      - TheCloudFrontOriginAccessIdentity
+    Properties:
+      Bucket: !Ref S3BucketName
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              CanonicalUser:
+                Fn::GetAtt: [ TheCloudFrontOriginAccessIdentity , S3CanonicalUserId ]
+            Action: "s3:GetObject"
+            Resource: !Sub "arn:aws:s3:::${S3BucketName}/*

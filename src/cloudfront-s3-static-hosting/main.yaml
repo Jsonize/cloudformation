@@ -3,8 +3,6 @@ AWSTemplateFormatVersion: 2010-09-09
 
 # https://s3.amazonaws.com/cloudformation.jsonize.com/cloudfront-s3-static-hosting.yaml
 
-# Make sure to update the CDN to update the S3 bucket policy.
-
 
 Description: Resources for an S3-CDN.
 
@@ -61,7 +59,7 @@ Resources:
         Enabled: true
         HttpVersion: http2
         Origins:
-          - DomainName: !Join [ "", [ !Ref S3BucketName, ".s3.amazonaws.com" ] ]
+          - DomainName: !GetAtt TheS3Bucket.DomainName
             Id: TheS3Bucket
             S3OriginConfig:
               OriginAccessIdentity: !Join [ "", [ "origin-access-identity/cloudfront/", !Ref TheCloudFrontOriginAccessIdentity ] ]
@@ -96,6 +94,11 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref S3BucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
 
   TheS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -104,19 +107,12 @@ Resources:
       - TheCloudFrontOriginAccessIdentity
     Properties:
       Bucket: !Ref S3BucketName
-      PolicyDocument: |
-        {
-          "Version": "2008-10-17",
-          "Id": "PolicyForCloudFrontPrivateContent",
-          "Statement": [
-            {
-              "Sid": "1",
-              "Effect": "Allow",
-              "Principal": {
-                "AWS": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${TheCloudFrontOriginAccessIdentity}"
-              },
-              "Action": "s3:GetObject",
-              "Resource": "arn:aws:s3:::${S3BucketName}/*"
-            }
-          ]
-        }
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              CanonicalUser:
+                Fn::GetAtt: [ TheCloudFrontOriginAccessIdentity , S3CanonicalUserId ]
+            Action: "s3:GetObject"
+            Resource: !Sub "${TheS3Bucket.Arn}/*"
