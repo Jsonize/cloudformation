@@ -33,6 +33,9 @@ exports.handler = function (event, context, callback) {
             return t.replace("${" + i + "}", s);
         });
     });
+    commandLine = commandLine.map(function (t) {
+        return t.replace("${version}", taskNameBase[1] || "latest");
+    });
     var params = {
         cluster: process.env["CLUSTER"],
         taskDefinition: task.taskDefinition + taskPostfix,
