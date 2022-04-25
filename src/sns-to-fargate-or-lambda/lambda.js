@@ -80,7 +80,7 @@ exports.handler = function (event, context, callback) {
     if (taskName.indexOf("(") > 0) {
         const tmp = taskName.split("(")
         taskName = tmp.shift();
-        estimation = parseInt((tmp.split(")"))[0], 10);
+        estimation = parseInt((tmp.join("").split(")"))[0], 10);
     }
     const task = tasks[taskName];
     let useFargate = !!task.taskDefinition;
