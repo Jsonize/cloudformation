@@ -11,14 +11,6 @@ Jsonize Cloudformation contains a suite of useful cloudformation templates.
 ```
 
 
-## Contributors
-
-- Ziggeo
-- Foodji
-- Jsonize
-- Oliver Friedmann
-
-
 ## License
 
 Apache-2.0

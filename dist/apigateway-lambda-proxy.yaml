@@ -151,3 +151,10 @@ Resources:
       ResourceRecords:
         - !GetAtt ApiGatewayApiDomainName.DistributionDomainName
       Type: CNAME
+
+
+Outputs:
+
+  ApiGatewayArn:
+    Description: The arn of the Api Gateway
+    Value: !GetAtt ApiGatewayApi.Arn
