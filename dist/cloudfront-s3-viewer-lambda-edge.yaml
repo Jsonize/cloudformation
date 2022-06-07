@@ -129,4 +129,11 @@ Resources:
               CanonicalUser:
                 Fn::GetAtt: [ TheCloudFrontOriginAccessIdentity , S3CanonicalUserId ]
             Action: "s3:GetObject"
-            Resource: !Sub "arn:aws:s3:::${S3BucketName}/*
+            Resource: !Sub "arn:aws:s3:::${S3BucketName}/*"
+
+
+Outputs:
+
+  DomainName:
+    Description: The DomainName of CloudFront
+    Value: !GetAtt TheCloudFrontDistribution.DomainName
