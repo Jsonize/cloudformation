@@ -4,7 +4,20 @@ const Lambda = new AWS.Lambda({apiVersion: '2015-03-31'});
 const FS = require("fs");
 const Util = require("util");
 
-const jobTypes = JSON.parse(FS.readFileSync("job-types.json"));
+const jobTypes = {};
+
+function extJobTypes(e) {
+    for (let k in e)
+        jobTypes[k] = e[k];
+}
+
+try {
+    extJobTypes(JSON.parse(process.env.JOB_TYPES));
+} catch (e) {}
+
+try {
+    extJobTypes(JSON.parse(FS.readFileSync("job-types.json")));
+} catch (e) {}
 
 function randomExponentialBackoff(f, cb, wait) {
     wait = wait || 1000;

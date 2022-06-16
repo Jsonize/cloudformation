@@ -33,3 +33,14 @@ Resources:
       FunctionName: !Ref LambdaFunctionArn
       Action: lambda:InvokeFunction
       Principal: sns.amazonaws.com
+
+
+Outputs:
+
+  SnsTopicName:
+    Description: Sns Topic Name
+    Value: !GetAtt SNSTopic.TopicName
+
+  SnsTopicArn:
+    Description: Sns Topic Arn
+    Value: !Ref SNSTopic
