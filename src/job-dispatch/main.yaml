@@ -93,6 +93,14 @@ Resources:
       Runtime: nodejs12.x
       Timeout: 600
 
+  LambdaSNSPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - LambdaFunction
+    Properties:
+      FunctionName: !Ref LambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com
 
 
 Outputs:

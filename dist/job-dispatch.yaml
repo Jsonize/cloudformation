@@ -118,7 +118,7 @@ Resources:
           function runOnFargate(taskDefinition, containerName, commandLine, data, cb, wait) {
               for (let key in data) {
                   commandLine = commandLine.map(function (t) {
-                      return t.replace("${" + key + "}", data[key]);
+                      return t.replace("${" + key + "}", data[key]).replace("#[" + key + "]", data[key]);
                   });
               }
               const params = {
@@ -195,7 +195,7 @@ Resources:
               }
               handlers.sort((x, y) => (y.priority || 0) - (x.priority || 0));
               console.log("Handlers", handlers);
-              if (handler.length === 0) {
+              if (handlers.length === 0) {
                   return;
               }
               let handler = handlers[0];
@@ -229,6 +229,14 @@ Resources:
       Runtime: nodejs12.x
       Timeout: 600
 
+  LambdaSNSPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - LambdaFunction
+    Properties:
+      FunctionName: !Ref LambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com
 
 
 Outputs:

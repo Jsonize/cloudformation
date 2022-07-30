@@ -35,7 +35,7 @@ function randomExponentialBackoff(f, cb, wait) {
 function runOnFargate(taskDefinition, containerName, commandLine, data, cb, wait) {
     for (let key in data) {
         commandLine = commandLine.map(function (t) {
-            return t.replace("${" + key + "}", data[key]);
+            return t.replace("${" + key + "}", data[key]).replace("#[" + key + "]", data[key]);
         });
     }
     const params = {
@@ -112,7 +112,7 @@ exports.handler = function (event, context, callback) {
     }
     handlers.sort((x, y) => (y.priority || 0) - (x.priority || 0));
     console.log("Handlers", handlers);
-    if (handler.length === 0) {
+    if (handlers.length === 0) {
         return;
     }
     let handler = handlers[0];
