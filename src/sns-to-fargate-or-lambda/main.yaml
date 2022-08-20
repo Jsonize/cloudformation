@@ -85,5 +85,5 @@ Resources:
           SUBNETS: !Join [ ",", !Ref ClusterSubnets]
       Handler: index.handler
       Role: !GetAtt LambdaRole.Arn
-      Runtime: nodejs12.x
+      Runtime: nodejs16.x
       Timeout: 600

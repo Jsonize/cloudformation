@@ -64,7 +64,7 @@ Resources:
           CLUSTER_NAME: !Ref ClusterName
       Handler: index.handler
       Role: !GetAtt ECSTaskTimeoutLambdaRole.Arn
-      Runtime: nodejs12.x
+      Runtime: nodejs16.x
       Timeout: 60
 
   ECSTaskTimeoutEventRule:

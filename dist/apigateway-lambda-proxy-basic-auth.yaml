@@ -231,7 +231,7 @@ Resources:
           BASIC_AUTH_PASSWORD: !Ref BasicAuthPassword
       Handler: index.handler
       Role: !GetAtt LambdaAuthorizerRole.Arn
-      Runtime: nodejs12.x
+      Runtime: nodejs16.x
       Timeout: 60
 
   LambdaAuthorizerApiGatewayRole:

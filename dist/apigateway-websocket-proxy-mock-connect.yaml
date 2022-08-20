@@ -135,7 +135,7 @@ Resources:
           AUTHORIZE_URI: !Ref AuthorizerUri
       Handler: index.handler
       Role: !GetAtt LambdaWebsocketAuthorizerRole.Arn
-      Runtime: nodejs12.x
+      Runtime: nodejs16.x
       Timeout: 60
 
   LambdaWebsocketAuthorizerApiGatewayRole:
