@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+# https://s3.amazonaws.com/cloudformation.jsonize.com/cloudfront-overwrite-response-headers.yaml
+
+Description: Resources for dynamically overwriting cloudfront response headers
+
+
+
+Parameters:
+
+  RouteBasedHeaders:
+    Type: String
+    Description: Route based headers
+
+
+Resources:
+
+  EdgeLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - edgelambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaRole
+
+  EdgeLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: !Sub |
+          {{file-read file:lambda.js indent:true}}
+      Handler: index.handler
+      Role: !GetAtt EdgeLambdaRole.Arn
+      Runtime: nodejs16.x
+      Timeout: 5
+
+  EdgeLambdaVersion:
+    Type: AWS::Lambda::Version
+    DependsOn:
+      - EdgeLambda
+    Properties:
+      FunctionName: !GetAtt EdgeLambda.Arn
+
+
+Outputs:
+
+  EdgeLambdaArn:
+    Description: The arn of the Edge lambda
+    Value: !GetAtt EdgeLambda.Arn
