@@ -55,18 +55,21 @@ function runOnFargate(commandLine, args, taskVersion, taskDefinition, containerN
 }
 
 function runOnLambda(paramMap, args, lambdaFunction, callback) {
+    const paramMapX = {};
+    for (let key in paramMap)
+        paramMapX[key] = paramMap[key];
     args.forEach(function (s, i) {
-        for (let key in paramMap)
-            paramMap[key] = paramMap[key].replace("${" + i + "}", s);
+        for (let key in paramMapX)
+            paramMapX[key] = paramMapX[key].replace("${" + i + "}", s);
     });
     const params = {
         FunctionName: lambdaFunction,
         InvocationType: "Event",
-        Payload: JSON.stringify(paramMap)
+        Payload: JSON.stringify(paramMapX)
     };
     console.log(Util.inspect(params, false, null, true /* enable colors */));
     randomExponentialBackoff(function (cb) {
-        Lambda.invoke(params, cb)
+        Lambda.invoke(params, cb);
     }, callback);
 }
 

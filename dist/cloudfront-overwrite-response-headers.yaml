@@ -45,9 +45,8 @@ Resources:
           
               const rbh = JSON.parse('${RouteBasedHeaders}');
           
-              // Example: [{"match":{"uri":".*mp4$"},"headers":{"Content-Type":"video/mp4"}},{"match":{"querystring":".*download=true.*"},"headers":{"Content-Type":"application/octet-stream"}}]
+              // Example: [{"match":{"uri":".*mp4$"},"headers":{"Content-Type":"video/mp4"}},{"match":{"uri":".*aac$"},"headers":{"Content-Type":"audio/aac"}},{"match":{"uri":".*jpg$"},"headers":{"Content-Type":"image/jpeg"}},{"match":{"querystring":".*download=true.*","uri":".*mp4$"},"headers":{"Content-Disposition":"attachment;filename=\\"video.mp4\\""}},{"match":{"querystring":".*download=true.*","uri":".*aac$"},"headers":{"Content-Disposition":"attachment;filename=\\"audio.aac\\""}},{"match":{"querystring":".*download=true.*","uri":".*jpg$"},"headers":{"Content-Disposition":"attachment;filename=\\"poster.jpg\\""}}]
               rbh.forEach(item => {
-                  // Example: {"match":{"uri":".*mp4$"},"headers":{"Content-Type":"video/mp4"}}
                   let isMatch = true;
                   for (let headerKey in item.match) {
                       const headerValue = item.match[headerKey];
