@@ -174,17 +174,20 @@ Resources:
                   console.log("Job Type", record.type, "not found");
                   return;
               }
+              
               let handlers = [];
-              if (record.handler && jobType.handlers[record.handler]) {
+              /*if (record.handler && jobType.handlers[record.handler]) {
                   handlers = [jobType.handlers[record.handler]];
-              } else {
+              } else {*/
                   for (let key in jobType.handlers)
                       handlers.push(jobType.handlers[key]);
-              }
+              //}
               if (record.estimations) {
                   handlers = handlers.filter(handler => {
                       let keep = true;
-                      if (handler.estimations) {
+                      if (record.handler && record.handler != handler.type)
+                          keep = false;
+                      else if (handler.estimations) {
                           for (let e in handler.estimations)
                               if (e in record.estimations)
                                   if (record.estimations[e] > handler.estimations[e])

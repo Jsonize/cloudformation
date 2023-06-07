@@ -3,6 +3,8 @@ AWSTemplateFormatVersion: 2010-09-09
 
 # https://s3.amazonaws.com/cloudformation.jsonize.com/cloudfront-s3-viewer-lambda-edge.yaml
 
+# CAUTION: This OVERWRITES the bucket policy of the s3 bucket.
+
 
 Description: Resources for an S3-CDN with a viewer edge lambda function.
 
