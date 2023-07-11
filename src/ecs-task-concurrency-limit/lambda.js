@@ -35,10 +35,13 @@ exports.handler = (event, context, callback) => {
             cluster: cluster,
             family: family
         };
+        // startedBy is truncated by AWS, hence the code below running listsTasks twice
+        /*
         if (taskCountMaxByStartedBy && startedBy) {
             listTasksQuery.startedBy = startedBy;
             delete listTasksQuery.family;
         }
+        */
         ecs.listTasks(listTasksQuery, function (err, data) {
             if (err) {
                 console.log(err);
@@ -50,13 +53,38 @@ exports.handler = (event, context, callback) => {
             }).length;
             console.log("RunningWithoutCurrent=", runningWithoutCurrent, "TaskCountMax=", taskCountMax);
             if (runningWithoutCurrent >= taskCountMax) {
-                console.log("Terminating Task ", event.detail.taskArn);
-                ecs.stopTask({
-                    task: task,
-                    cluster: cluster
-                }, function(err, data) {
-                    console.log(err, data);
-                });
+                if (taskCountMaxByStartedBy && startedBy) {
+                    listTasksQuery.startedBy = startedBy;
+                    delete listTasksQuery.family;
+                    ecs.listTasks(listTasksQuery, function (err, data) {
+                        if (err) {
+                            console.log(err);
+                            return;
+                        }
+                        console.log("Found StartedBy Tasks", data);
+                        var runningWithoutCurrent = data.taskArns.filter(function (arn) {
+                            return arn !== event.detail.taskArn;
+                        }).length;
+                        console.log("RunningWithoutCurrentStartedBy=", runningWithoutCurrent, "TaskCountMaxStartedBy=", taskCountMax);
+                        if (runningWithoutCurrent >= taskCountMax) {
+                            console.log("Terminating Task ", event.detail.taskArn);
+                            ecs.stopTask({
+                                task: task,
+                                cluster: cluster
+                            }, function(err, data) {
+                                console.log(err, data);
+                            });
+                        }
+                    });
+                } else {
+                    console.log("Terminating Task ", event.detail.taskArn);
+                    ecs.stopTask({
+                        task: task,
+                        cluster: cluster
+                    }, function(err, data) {
+                        console.log(err, data);
+                    });
+                }
             }
         });
     });
