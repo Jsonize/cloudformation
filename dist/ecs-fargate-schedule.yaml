@@ -61,6 +61,7 @@ Resources:
           EcsParameters:
             TaskDefinitionArn: !Join [ "", ["arn:aws:ecs:", !Ref "AWS::Region", ":", !Ref "AWS::AccountId", ":task-definition/", !Ref TaskName]]
             TaskCount: 1
+            PropagateTags: TASK_DEFINITION
             LaunchType: 'FARGATE'
             PlatformVersion: 'LATEST'
             NetworkConfiguration:

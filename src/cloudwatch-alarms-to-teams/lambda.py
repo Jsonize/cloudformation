@@ -55,7 +55,7 @@ def handler(event, context):
       "text": data["text"]
     }
 
-    req = Request(HOOK_URL, json.dumps(message).encode('utf-8'))
+    req = Request(HOOK_URL, json.dumps(message).encode('utf-8'), headers={'Content-Type': 'application/json'})
     try:
         response = urlopen(req)
         response.read()

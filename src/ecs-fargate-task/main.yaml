@@ -89,6 +89,8 @@ Resources:
           - Key: task-count-max-by-started-by
             Value: !Ref TaskCountMaxByStartedBy
           - !Ref "AWS::NoValue"
+        - Key: ecs-task-def
+          Value: !Ref TaskName
       ContainerDefinitions:
         - Name: !Ref TaskName
           Essential: true
