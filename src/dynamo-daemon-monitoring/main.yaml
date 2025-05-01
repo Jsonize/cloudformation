@@ -90,7 +90,7 @@ Resources:
           SNS_TOPIC: !Ref AlarmSNSTopic
       Handler: index.handler
       Role: !GetAtt LambdaRole.Arn
-      Runtime: python3.7
+      Runtime: python3.12
       Timeout: 60
 
   ScheduledLambdaEventRule:
