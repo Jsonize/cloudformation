@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
 
-# https://s3.amazonaws.com/cloudformation.jsonize.com/apigateway-lambda-proxy.yaml
+# https://s3.amazonaws.com/cloudformation.jsonize.com/apigateway-lambda-proxy-basic-auth.yaml
 
 Description: Resources for setting up an api gateway with a lambda proxy backend.
 

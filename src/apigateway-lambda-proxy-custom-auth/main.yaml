@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
 
-# https://s3.amazonaws.com/cloudformation.jsonize.com/apigateway-lambda-proxy-basic-auth.yaml
+# https://s3.amazonaws.com/cloudformation.jsonize.com/apigateway-lambda-proxy-custom-auth.yaml
 
 Description: Resources for setting up an api gateway with a lambda proxy backend.
 
@@ -28,13 +28,9 @@ Parameters:
     Type: String
     Description: The lambda function arn
 
-  BasicAuthUser:
+  LambdaAuthorizerArn:
     Type: String
-    Description: Basic auth user name
-
-  BasicAuthPassword:
-    Type: String
-    Description: Basic auth password
+    Description: The lambda authorizer function arn
 
 
 Resources:
@@ -160,50 +156,8 @@ Resources:
         - !GetAtt ApiGatewayApiDomainName.DistributionDomainName
       Type: CNAME
 
-  LambdaAuthorizerRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      Path: "/"
-      Policies:
-        - PolicyName: root
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:*
-                Resource: arn:aws:logs:*:*:*
-
-  LambdaAuthorizer:
-    Type: AWS::Lambda::Function
-    DependsOn:
-      - LambdaAuthorizerRole
-    Properties:
-      Code:
-        ZipFile: |
-          {{file-read file:./authorizer.js indent:true}}
-      Environment:
-        Variables:
-          BASIC_AUTH_USER: !Ref BasicAuthUser
-          BASIC_AUTH_PASSWORD: !Ref BasicAuthPassword
-      Handler: index.handler
-      Role: !GetAtt LambdaAuthorizerRole.Arn
-      Runtime: nodejs16.x
-      Timeout: 60
-
   LambdaAuthorizerApiGatewayRole:
     Type: AWS::IAM::Role
-    DependsOn:
-      - LambdaAuthorizer
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -222,29 +176,17 @@ Resources:
             Statement:
               - Effect: Allow
                 Action: lambda:InvokeFunction
-                Resource: !GetAtt LambdaAuthorizer.Arn
+                Resource: !Ref LambdaAuthorizerArn
 
   ApiGatewayAuthorizer:
     Type: AWS::ApiGateway::Authorizer
     DependsOn:
       - ApiGatewayApi
-      - LambdaAuthorizer
       - LambdaAuthorizerApiGatewayRole
     Properties:
       Name: !Join [ "", [ !Ref ResourceName, "Authorizer" ] ]
       RestApiId: !Ref ApiGatewayApi
       Type: REQUEST
-      AuthorizerUri: !Join [ "", [ "arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/", !GetAtt LambdaAuthorizer.Arn, "/invocations" ] ]
+      AuthorizerUri: !Join [ "", [ "arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/", !Ref LambdaAuthorizerArn, "/invocations" ] ]
       AuthorizerCredentials: !GetAtt LambdaAuthorizerApiGatewayRole.Arn
       IdentitySource: method.request.header.Authorization
-
-  ApiGatewayBasicAuthResponse:
-    Type: AWS::ApiGateway::GatewayResponse
-    DependsOn:
-      - ApiGatewayApi
-    Properties:
-      ResponseParameters:
-        gatewayresponse.header.WWW-Authenticate: "'Basic'"
-      ResponseType: UNAUTHORIZED
-      RestApiId: !Ref ApiGatewayApi
-      StatusCode: '401'
