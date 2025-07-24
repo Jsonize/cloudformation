@@ -32,6 +32,11 @@ Parameters:
     Type: String
     Description: The lambda authorizer function arn
 
+  AuthorizerIdentitySource:
+    Type: String
+    Default: method.request.header.Authorization
+    Description: The identity source for the API Gateway authorizer, e.g., method.request.header
+
 
 Resources:
 
@@ -189,4 +194,4 @@ Resources:
       Type: REQUEST
       AuthorizerUri: !Join [ "", [ "arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/", !Ref LambdaAuthorizerArn, "/invocations" ] ]
       AuthorizerCredentials: !GetAtt LambdaAuthorizerApiGatewayRole.Arn
-      IdentitySource: method.request.header.Authorization
+      IdentitySource: !Ref AuthorizerIdentitySource
