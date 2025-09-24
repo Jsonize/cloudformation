@@ -16,14 +16,14 @@ def parseDuration(s):
         "week": 7 * 24 * 60 * 60,
         "month": 30 * 24* 60 * 60
     }
-    duration = re.compile('(\d+)\s+([a-z]+[^s])s?').match(s)
+    duration = re.compile(r'(\d+)\s+([a-z]+[^s])s?').match(s)
     return int(duration.group(1)) * durationMap[duration.group(2)]
 
 def parseLastInvocation(s):
-    rate = re.compile('rate\((.*)\)').match(s)
+    rate = re.compile(r'rate\((.*)\)').match(s)
     if rate != None :
         return datetime.datetime.now() - datetime.timedelta(seconds=parseDuration(rate.group(1)))
-    cron = re.compile('cron\((.*)\)').match(s)
+    cron = re.compile(r'cron\((.*)\)').match(s)
     if cron != None :
         # TODO
         return None
@@ -80,64 +80,76 @@ def handler(event, context):
         if ("enabled" in configItem) and not (configItem['enabled']):
             continue
         log(configItem)
-        daemonName = configItem['daemonName']
+        mainDaemonName = configItem['daemonName']
         minInvocations = configItem['minInvocations']
         thresholdStart = parseDuration(configItem['thresholdStart'])
         timeoutEnd = parseDuration(configItem['timeoutEnd'])
         schedule = parseLastInvocation(configItem['schedule'])
+        daemonNames = [mainDaemonName]
+        if "alternativeDaemonName" in configItem:
+            daemonNames.append(configItem['alternativeDaemonName'])
         #log(schedule.isoformat())
-        dataItems = dataTable.query(KeyConditionExpression=Key('daemonName').eq(daemonName) & Key('date').gte(schedule.isoformat()))
-        contexts = {}
-        if 'contexts' in configItem:
-            for ctx in configItem['contexts']:
-                contexts[ctx] = {}
-        else :
-            contexts["default"] = {}
-        items = dataItems['Items']
-        for dataItem in items:
-            dataItem['date'] = dataItem['date'].split("~", 1)[0]
-            dataItem['sortkey'] = dataItem['date'] + "~" + dataItem['state']
-        items.sort(key=lambda x:x['sortkey'])
-        for dataItem in items :
-            if not ('default' in contexts):
-                if not ("context" in dataItem) :
-                    continue
-                if not (dataItem['context'] in contexts) :
-                    continue
-                context = contexts[dataItem['context']]
+        for i, daemonName in enumerate(daemonNames):
+            dataItems = dataTable.query(KeyConditionExpression=Key('daemonName').eq(daemonName) & Key('date').gte(schedule.isoformat()))
+            contexts = {}
+            if 'contexts' in configItem:
+                for ctx in configItem['contexts']:
+                    contexts[ctx] = {}
             else :
-                context = contexts['default']
-            if not (dataItem['invocation'] in context) :
-                context[dataItem['invocation']] = {'success': 0, 'timeout': 0, 'pending': None}
-            invocation = context[dataItem['invocation']]
-            invocationDate = datetime.datetime.strptime(dataItem['date'], "%Y-%m-%dT%H:%M:%S")
-            if dataItem['state'] == "start" :
-                if invocationDate <= schedule + datetime.timedelta(seconds=thresholdStart) :
-                    invocation['pending'] = invocationDate
-            if dataItem['state'] == "stop" and invocation['pending'] != None :
-                if invocationDate <= invocation['pending'] + datetime.timedelta(seconds=timeoutEnd) :
-                    invocation['success'] += 1
+                contexts["default"] = {}
+            items = dataItems['Items']
+            for dataItem in items:
+                dataItem['date'] = dataItem['date'].split("~", 1)[0]
+            # first sort by state ascending
+            items.sort(key=lambda x: x['state'])
+            # then sort by date ascending
+            items.sort(key=lambda x: x['date'])
+            for dataItem in items :
+                if not ('default' in contexts):
+                    if not ("context" in dataItem) :
+                        continue
+                    if not (dataItem['context'] in contexts) :
+                        continue
+                    context = contexts[dataItem['context']]
                 else :
-                    invocation['timeout'] += 1
-                invocation['pending'] = None
-        for ctxKey,invRec in contexts.items() :
-            counter = 0
-            for invKey,invVal in invRec.items() :
-                counter += invVal['success']
-            contexts[ctxKey] = counter
-        if not contexts :
-            contexts['default'] = 0
-        for ctx, counter in contexts.items() :
-            log(daemonName + " " + ctx + ": " + str(counter))
-            if counter < minInvocations :
-                log("ALARM " + daemonName + " " + ctx + ": " + str(counter))
-                sns.publish(
-                    TopicArn=snsTopic,
-                    Message=json.dumps({
-                        'AlarmName': daemonName + " " + ctx,
-                        'OldStateValue': "UNKNOWN",
-                        'NewStateValue': "ALARM",
-                        'NewStateReason': "ALARM " + daemonName + " " + ctx + ": " + str(counter)
-                    }),
-                    Subject="ALARM " + daemonName + " " + ctx + ": " + str(counter)
-                )
+                    context = contexts['default']
+                if not (dataItem['invocation'] in context) :
+                    context[dataItem['invocation']] = {'success': 0, 'timeout': 0, 'pending': None}
+                invocation = context[dataItem['invocation']]
+                invocationDate = datetime.datetime.strptime(dataItem['date'], "%Y-%m-%dT%H:%M:%S")
+                if dataItem['state'] == "start" :
+                    if invocationDate <= schedule + datetime.timedelta(seconds=thresholdStart) :
+                        invocation['pending'] = invocationDate
+                if dataItem['state'] == "stop" and invocation['pending'] != None :
+                    if invocationDate <= invocation['pending'] + datetime.timedelta(seconds=timeoutEnd) :
+                        invocation['success'] += 1
+                    else :
+                        invocation['timeout'] += 1
+                    invocation['pending'] = None
+            for ctxKey,invRec in contexts.items() :
+                counter = 0
+                for invKey,invVal in invRec.items() :
+                    counter += invVal['success']
+                contexts[ctxKey] = counter
+            if not contexts :
+                contexts['default'] = 0
+            done = False
+            for ctx, counter in contexts.items() :
+                log(mainDaemonName + " " + ctx + ": " + str(counter))
+                if counter < minInvocations :
+                    if i == len(daemonNames) - 1 :
+                        log("ALARM " + mainDaemonName + " " + ctx + ": " + str(counter))
+                        sns.publish(
+                            TopicArn=snsTopic,
+                            Message=json.dumps({
+                                'AlarmName': mainDaemonName + " " + ctx,
+                                'OldStateValue': "UNKNOWN",
+                                'NewStateValue': "ALARM",
+                                'NewStateReason': "ALARM " + mainDaemonName + " " + ctx + ": " + str(counter)
+                            }),
+                            Subject="ALARM " + mainDaemonName + " " + ctx + ": " + str(counter)
+                        )
+                else :
+                    done = True
+            if done:
+                break

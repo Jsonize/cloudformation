@@ -1,0 +1,212 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+# https://s3.amazonaws.com/cloudformation.jsonize.com/route53-redirect-two-domains.yaml
+
+Description: >
+  Redirect two hostnames (apex or subdomains) under ZoneDomain to TargetDomain using
+  Route53 + CloudFront (301 via CloudFront Function) and a placeholder S3 origin.
+
+Parameters:
+  AcmCertificateArn:
+    Type: String
+    Description: The ARN of the SSL certificate to use for the CloudFront distribution.
+  ZoneDomain:
+    Type: String
+    Description: The zone domain for the resource
+  SubDomain1:
+    Type: String
+    Description: First subdomain to redirect; use empty string "" for the apex
+  SubDomain2:
+    Type: String
+    Description: Second subdomain to redirect; use empty string "" for the apex
+  TargetDomain:
+    Type: String
+    Description: The target domain to redirect to, including protocol (e.g. https://www.bar.com)
+
+Mappings:
+  CloudFront:
+    HostedZoneId:
+      Global: Z2FDTNDATAQYW2
+  ManagedPolicies:
+    Cache:
+      # AWS managed "CachingDisabled" policy ID
+      CachingDisabled: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+
+Conditions:
+  IsApex1: !Equals [ !Ref SubDomain1, '' ]
+  IsApex2: !Equals [ !Ref SubDomain2, '' ]
+  # True when both represent the same hostname (both apex, or same non-empty label)
+  SubDomainsEqual: !Or
+    - !And [ !Condition IsApex1, !Condition IsApex2 ]
+    - !And [ !Not [ !Condition IsApex1 ], !Not [ !Condition IsApex2 ], !Equals [ !Ref SubDomain1, !Ref SubDomain2 ] ]
+  IncludeSecond: !Not [ !Condition SubDomainsEqual ]
+
+Resources:
+
+  RedirectHoldingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  RedirectFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub redirect-to-target-${AWS::StackName}
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Issue 301 to TargetDomain while preserving path and query string
+        Runtime: cloudfront-js-2.0
+      FunctionCode: !Sub |
+        function handler(event) {
+          var req = event.request;
+          var uri = req.uri || "/";
+          var qs = "";
+          if (req.querystring && Object.keys(req.querystring).length > 0) {
+            var parts = [];
+            for (var k in req.querystring) {
+              if (!req.querystring.hasOwnProperty(k)) continue;
+              var item = req.querystring[k];
+              if (item && typeof item.value !== "undefined") {
+                parts.push(encodeURIComponent(k) + "=" + encodeURIComponent(item.value));
+              }
+              if (item && Array.isArray(item.multiValue)) {
+                for (var i = 0; i < item.multiValue.length; i++) {
+                  var mv = item.multiValue[i];
+                  if (mv && typeof mv.value !== "undefined") {
+                    parts.push(encodeURIComponent(k) + "=" + encodeURIComponent(mv.value));
+                  }
+                }
+              }
+            }
+            if (parts.length > 0) qs = "?" + parts.join("&");
+          }
+          var location = "${TargetDomain}" + uri + qs;
+          return {
+            statusCode: 301,
+            statusDescription: "Moved Permanently",
+            headers: {
+              "location": { value: location },
+              "cache-control": { value: "max-age=3600" }
+            }
+          };
+        }
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub Redirect two hostnames under ${ZoneDomain} to ${TargetDomain}
+        HttpVersion: http2
+        PriceClass: PriceClass_100
+        Aliases:
+          - !If
+            - IsApex1
+            - !Ref ZoneDomain
+            - !Sub "${SubDomain1}.${ZoneDomain}"
+          - !If
+            - IncludeSecond
+            - !If
+              - IsApex2
+              - !Ref ZoneDomain
+              - !Sub "${SubDomain2}.${ZoneDomain}"
+            - !Ref AWS::NoValue
+        ViewerCertificate:
+          AcmCertificateArn: !Ref AcmCertificateArn
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        DefaultCacheBehavior:
+          TargetOriginId: s3-origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          CachePolicyId: !FindInMap [ ManagedPolicies, Cache, CachingDisabled ]
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt RedirectFunction.FunctionMetadata.FunctionARN
+        Origins:
+          - Id: s3-origin
+            DomainName: !GetAtt RedirectHoldingBucket.RegionalDomainName
+            S3OriginConfig: {}
+
+  # Records for SubDomain1
+  ARecord1:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Sub "${ZoneDomain}."
+      Name: !If
+        - IsApex1
+        - !Ref ZoneDomain
+        - !Sub "${SubDomain1}.${ZoneDomain}"
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        EvaluateTargetHealth: false
+        HostedZoneId: !FindInMap [ CloudFront, HostedZoneId, Global ]
+
+  AAAARecord1:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Sub "${ZoneDomain}."
+      Name: !If
+        - IsApex1
+        - !Ref ZoneDomain
+        - !Sub "${SubDomain1}.${ZoneDomain}"
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        EvaluateTargetHealth: false
+        HostedZoneId: !FindInMap [ CloudFront, HostedZoneId, Global ]
+
+  # Records for SubDomain2 (created only if different from SubDomain1)
+  ARecord2:
+    Condition: IncludeSecond
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Sub "${ZoneDomain}."
+      Name: !If
+        - IsApex2
+        - !Ref ZoneDomain
+        - !Sub "${SubDomain2}.${ZoneDomain}"
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        EvaluateTargetHealth: false
+        HostedZoneId: !FindInMap [ CloudFront, HostedZoneId, Global ]
+
+  AAAARecord2:
+    Condition: IncludeSecond
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Sub "${ZoneDomain}."
+      Name: !If
+        - IsApex2
+        - !Ref ZoneDomain
+        - !Sub "${SubDomain2}.${ZoneDomain}"
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        EvaluateTargetHealth: false
+        HostedZoneId: !FindInMap [ CloudFront, HostedZoneId, Global ]
+
+Outputs:
+  DistributionDomainName:
+    Description: CloudFront distribution domain name
+    Value: !GetAtt Distribution.DomainName
+  RedirectHostnames:
+    Description: Hostnames being redirected (deduped)
+    Value: !Join
+      - ', '
+      - - !If [ IsApex1, !Ref ZoneDomain, !Sub "${SubDomain1}.${ZoneDomain}" ]
+        - !If
+          - IncludeSecond
+          - !If [ IsApex2, !Ref ZoneDomain, !Sub "${SubDomain2}.${ZoneDomain}" ]
+          - !Ref AWS::NoValue
+  TargetDomainEcho:
+    Description: The destination all requests are redirected to
+    Value: !Ref TargetDomain
