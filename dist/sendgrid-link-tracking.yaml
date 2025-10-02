@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+
+# https://s3.amazonaws.com/cloudformation.jsonize.com/sendgrid-link-tracking.yaml
+
+
+Description: CloudFront + Route53 for SendGrid SSL link/click tracking
+
+Parameters:
+  AcmCertificateArn:
+    Type: String
+    Description: ACM cert in us-east-1 for the branded tracking domain.
+  ZoneDomain:
+    Type: String
+    Description: The hosted zone domain (e.g., example.com)
+  SubDomain:
+    Type: String
+    Description: The subdomain for tracking (e.g., link)
+
+Resources:
+  SendGridDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        HttpVersion: http2
+        PriceClass: PriceClass_All
+        Aliases:
+          - !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
+        Origins:
+          - Id: SendGridOrigin
+            DomainName: sendgrid.net
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              HTTPSPort: 443
+              OriginSSLProtocols:
+                - TLSv1.2
+        DefaultCacheBehavior:
+          TargetOriginId: SendGridOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD]
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # Managed-CachingDisabled
+          OriginRequestPolicyId: bf0718e1-ba1e-49d1-88b1-f726733018ae # Managed-HostHeaderOnly
+          Compress: true
+        ViewerCertificate:
+          AcmCertificateArn: !Ref AcmCertificateArn
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+      Tags:
+        - Key: Domain
+          Value: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
+
+  Route53RecordForCF:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Join ["", [!Ref ZoneDomain, "."]]
+      Name: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
+      Type: CNAME
+      TTL: '300'
+      ResourceRecords:
+        - !GetAtt SendGridDistribution.DomainName
