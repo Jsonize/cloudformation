@@ -118,8 +118,8 @@ def handler(event, context):
                 invocation = context[dataItem['invocation']]
                 invocationDate = datetime.datetime.strptime(dataItem['date'], "%Y-%m-%dT%H:%M:%S")
                 if dataItem['state'] == "start" :
-                    if invocationDate <= schedule + datetime.timedelta(seconds=thresholdStart) :
-                        invocation['pending'] = invocationDate
+                    # if invocationDate <= schedule + datetime.timedelta(seconds=thresholdStart) :
+                    invocation['pending'] = invocationDate
                 if dataItem['state'] == "stop" and invocation['pending'] != None :
                     if invocationDate <= invocation['pending'] + datetime.timedelta(seconds=timeoutEnd) :
                         invocation['success'] += 1
@@ -139,6 +139,8 @@ def handler(event, context):
                 if counter < minInvocations :
                     if i == len(daemonNames) - 1 :
                         log("ALARM " + mainDaemonName + " " + ctx + ": " + str(counter))
+                        log(contexts)
+                        log(items)
                         sns.publish(
                             TopicArn=snsTopic,
                             Message=json.dumps({
