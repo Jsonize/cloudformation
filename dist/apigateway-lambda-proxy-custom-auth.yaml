@@ -16,6 +16,10 @@ Parameters:
     Type: String
     Description: The zone domain for the resource
 
+  ZoneId:
+    Type: String
+    Description: The hosted zone ID for the resource
+
   SubDomain:
     Type: String
     Description: The sub domain for the resource
@@ -36,6 +40,9 @@ Parameters:
     Type: String
     Default: method.request.header.Authorization
     Description: The identity source for the API Gateway authorizer, e.g., method.request.header
+
+Conditions:
+  HasZoneId: !Not [!Equals [!Ref ZoneId, ""]]
 
 
 Resources:
@@ -154,7 +161,8 @@ Resources:
     DependsOn:
       - ApiGatewayApiDomainName
     Properties:
-      HostedZoneName: !Join [ "", [ !Ref ZoneDomain, "." ] ]
+      HostedZoneId: !If [ HasZoneId, !Ref ZoneId, !Ref "AWS::NoValue" ]
+      HostedZoneName: !If [ HasZoneId, !Ref "AWS::NoValue", !Join [ "", [ !Ref ZoneDomain, "." ] ] ]
       Name: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
       TTL: 300
       ResourceRecords:
