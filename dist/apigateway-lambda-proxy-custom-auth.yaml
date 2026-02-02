@@ -41,6 +41,12 @@ Parameters:
     Default: method.request.header.Authorization
     Description: The identity source for the API Gateway authorizer, e.g., method.request.header
 
+  AuthorizerTtlInSeconds:
+    Type: Number
+    Default: 0
+    Description: The TTL in seconds for caching authorizer results
+        
+
 Conditions:
   HasZoneId: !Not [!Equals [!Ref ZoneId, ""]]
 
@@ -203,3 +209,4 @@ Resources:
       AuthorizerUri: !Join [ "", [ "arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/", !Ref LambdaAuthorizerArn, "/invocations" ] ]
       AuthorizerCredentials: !GetAtt LambdaAuthorizerApiGatewayRole.Arn
       IdentitySource: !Ref AuthorizerIdentitySource
+      AuthorizerResultTtlInSeconds: !Ref AuthorizerTtlInSeconds
