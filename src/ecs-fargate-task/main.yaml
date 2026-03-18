@@ -39,14 +39,6 @@ Parameters:
     Type: String
     Description: 2-multiple of 512
     Default: 512
-    AllowedValues:
-      - 512
-      - 1024
-      - 2048
-      - 4096
-      - 8192
-      - 16384
-      - 32768
 
   TaskCountMax:
     Type: String
