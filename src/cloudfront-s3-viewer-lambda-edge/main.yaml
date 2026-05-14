@@ -114,7 +114,7 @@ Resources:
     Properties:
       HostedZoneName: !Join [ "", [ !Ref ZoneDomain, "." ] ]
       Name: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
-      Type: CNAME
+      Type: ALIAS
       TTL: '900'
       ResourceRecords:
         - !GetAtt TheCloudFrontDistribution.DomainName

@@ -173,7 +173,7 @@ Resources:
       TTL: 300
       ResourceRecords:
         - !GetAtt ApiGatewayApiDomainName.DistributionDomainName
-      Type: CNAME
+      Type: ALIAS
 
   LambdaAuthorizerApiGatewayRole:
     Type: AWS::IAM::Role

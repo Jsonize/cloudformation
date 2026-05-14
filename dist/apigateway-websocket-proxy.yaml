@@ -377,4 +377,4 @@ Resources:
       TTL: 300
       ResourceRecords:
         - !GetAtt WebsocketApiGatewayDomainName.RegionalDomainName
-      Type: CNAME
+      Type: ALIAS

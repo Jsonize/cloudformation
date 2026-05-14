@@ -97,4 +97,4 @@ Resources:
       TTL: 300
       ResourceRecords:
         - !GetAtt CallbackGatewayDomainName.RegionalDomainName
-      Type: CNAME
+      Type: ALIAS
