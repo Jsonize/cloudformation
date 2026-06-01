@@ -46,13 +46,36 @@ def handler(event, context):
         }
     }
     data = messages.get((new_state, alarm_name), base_data)
+    heading_color = "Attention" if data["colour"].lower() == "d63333" else "Good"
 
     message = {
-      "@context": "https://schema.org/extensions",
-      "@type": "MessageCard",
-      "themeColor": data["colour"],
-      "title": data["title"],
-      "text": data["text"]
+        "type": "message",
+        "attachments": [
+            {
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "contentUrl": None,
+                "content": {
+                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "type": "AdaptiveCard",
+                    "version": "1.2",
+                    "body": [
+                        {
+                            "type": "TextBlock",
+                            "size": "Medium",
+                            "weight": "Bolder",
+                            "color": heading_color,
+                            "wrap": True,
+                            "text": data["title"]
+                        },
+                        {
+                            "type": "TextBlock",
+                            "wrap": True,
+                            "text": data["text"]
+                        }
+                    ]
+                }
+            }
+        ]
     }
 
     req = Request(HOOK_URL, json.dumps(message).encode('utf-8'), headers={'Content-Type': 'application/json'})
