@@ -19,6 +19,11 @@ Parameters:
     Type: String
     Description: Schedule expression, e.g. 'rate(6 hours)'
 
+  ScheduleTimezone:
+    Type: String
+    Description: Optional IANA timezone for the schedule, e.g. Europe/Berlin
+    Default: ""
+
   ClusterSecurityGroup:
     Type: AWS::EC2::SecurityGroup::Id
     Description: Cluster security group
@@ -43,12 +48,42 @@ Parameters:
 
 Conditions:
   HasContainerOverrides: !Not [ !Equals ["", !Ref ContainerOverrides]]
+  HasScheduleTimezone: !Not [ !Equals ["", !Ref ScheduleTimezone]]
+  NoScheduleTimezone: !Equals ["", !Ref ScheduleTimezone]
 
 
 Resources:
 
+  ECSFargateScheduleScheduler:
+    Type: AWS::Scheduler::Schedule
+    Condition: HasScheduleTimezone
+    Properties:
+      Name: !Ref ScheduleName
+      ScheduleExpression: !Ref ScheduleExpression
+      ScheduleExpressionTimezone: !Ref ScheduleTimezone
+      State: ENABLED
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      Target:
+        RoleArn: !Ref ExecutionRoleArn
+        Arn: !Join [ "", ["arn:aws:ecs:", !Ref "AWS::Region", ":", !Ref "AWS::AccountId", ":cluster/", !Ref ClusterName]]
+        Input: !If [HasContainerOverrides, !Join [ "", [ "{\"containerOverrides\":[", !Ref ContainerOverrides, "]}" ] ], !Ref "AWS::NoValue"]
+        EcsParameters:
+          TaskDefinitionArn: !Join [ "", ["arn:aws:ecs:", !Ref "AWS::Region", ":", !Ref "AWS::AccountId", ":task-definition/", !Ref TaskName]]
+          TaskCount: 1
+          PropagateTags: TASK_DEFINITION
+          LaunchType: 'FARGATE'
+          PlatformVersion: 'LATEST'
+          NetworkConfiguration:
+            AwsvpcConfiguration:
+              AssignPublicIp: ENABLED
+              SecurityGroups:
+                - !Ref ClusterSecurityGroup
+              Subnets: !Ref ClusterSubnets
+
   ECSFargateScheduleRule:
     Type: AWS::Events::Rule
+    Condition: NoScheduleTimezone
     Properties:
       Name: !Ref ScheduleName
       ScheduleExpression: !Ref ScheduleExpression
