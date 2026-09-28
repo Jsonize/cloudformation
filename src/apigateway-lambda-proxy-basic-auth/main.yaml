@@ -4,8 +4,6 @@ AWSTemplateFormatVersion: 2010-09-09
 
 Description: Resources for setting up an api gateway with a lambda proxy backend.
 
-# TODO: This is currently lacking associating the authorizer with methods.
-
 Parameters:
 
   CertificateArn:
@@ -15,6 +13,15 @@ Parameters:
   ZoneDomain:
     Type: String
     Description: The zone domain for the resource
+
+  HostedZoneId:
+    Type: String
+    Default: ""
+    Description: >-
+      Optional Route 53 hosted zone id. Set this when multiple hosted zones
+      share the same ZoneDomain name (otherwise the DNS record lookup by name
+      is ambiguous and the stack fails with "Multiple hosted zones with name
+      ... found"). When empty, the zone is resolved by ZoneDomain name.
 
   SubDomain:
     Type: String
@@ -35,6 +42,10 @@ Parameters:
   BasicAuthPassword:
     Type: String
     Description: Basic auth password
+
+
+Conditions:
+  UseHostedZoneId: !Not [ !Equals [ !Ref HostedZoneId, "" ] ]
 
 
 Resources:
@@ -65,6 +76,8 @@ Resources:
                   required: true
                   type: string
               responses: {}
+              security:
+                - BasicAuthAuthorizer: []
               x-amazon-apigateway-integration:
                 uri: !Join ["", ["arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/", !Ref LambdaFunctionArn, "/invocations" ] ]
                 httpMethod: POST
@@ -102,6 +115,20 @@ Resources:
           Empty:
             type: object
             title: Empty Schema
+        securityDefinitions:
+          BasicAuthAuthorizer:
+            type: apiKey
+            name: Authorization
+            in: header
+            x-amazon-apigateway-authtype: custom
+            x-amazon-apigateway-authorizer:
+              type: request
+              identitySource: method.request.header.Authorization
+              # No result caching: cache is keyed on the identity source, which
+              # would let one accepted credential authorise others until TTL.
+              authorizerResultTtlInSeconds: 0
+              authorizerUri: !Join ["", ["arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/", !GetAtt LambdaAuthorizer.Arn, "/invocations" ] ]
+              authorizerCredentials: !GetAtt LambdaAuthorizerApiGatewayRole.Arn
 
   LambdaApiGatewayExecutionPermission:
     Type: AWS::Lambda::Permission
@@ -153,12 +180,16 @@ Resources:
     DependsOn:
       - ApiGatewayApiDomainName
     Properties:
-      HostedZoneName: !Join [ "", [ !Ref ZoneDomain, "." ] ]
+      HostedZoneName: !If [ UseHostedZoneId, !Ref "AWS::NoValue", !Join [ "", [ !Ref ZoneDomain, "." ] ] ]
+      HostedZoneId: !If [ UseHostedZoneId, !Ref HostedZoneId, !Ref "AWS::NoValue" ]
       Name: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
-      TTL: 300
-      ResourceRecords:
-        - !GetAtt ApiGatewayApiDomainName.DistributionDomainName
-      Type: ALIAS
+      Type: A
+      AliasTarget:
+        # EDGE-optimised API Gateway domains are fronted by CloudFront, so the
+        # alias target zone is the fixed CloudFront hosted zone id.
+        DNSName: !GetAtt ApiGatewayApiDomainName.DistributionDomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+        EvaluateTargetHealth: false
 
   LambdaAuthorizerRole:
     Type: AWS::IAM::Role
@@ -197,7 +228,7 @@ Resources:
           BASIC_AUTH_PASSWORD: !Ref BasicAuthPassword
       Handler: index.handler
       Role: !GetAtt LambdaAuthorizerRole.Arn
-      Runtime: nodejs16.x
+      Runtime: nodejs22.x
       Timeout: 60
 
   LambdaAuthorizerApiGatewayRole:
@@ -223,20 +254,6 @@ Resources:
               - Effect: Allow
                 Action: lambda:InvokeFunction
                 Resource: !GetAtt LambdaAuthorizer.Arn
-
-  ApiGatewayAuthorizer:
-    Type: AWS::ApiGateway::Authorizer
-    DependsOn:
-      - ApiGatewayApi
-      - LambdaAuthorizer
-      - LambdaAuthorizerApiGatewayRole
-    Properties:
-      Name: !Join [ "", [ !Ref ResourceName, "Authorizer" ] ]
-      RestApiId: !Ref ApiGatewayApi
-      Type: REQUEST
-      AuthorizerUri: !Join [ "", [ "arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/", !GetAtt LambdaAuthorizer.Arn, "/invocations" ] ]
-      AuthorizerCredentials: !GetAtt LambdaAuthorizerApiGatewayRole.Arn
-      IdentitySource: method.request.header.Authorization
 
   ApiGatewayBasicAuthResponse:
     Type: AWS::ApiGateway::GatewayResponse

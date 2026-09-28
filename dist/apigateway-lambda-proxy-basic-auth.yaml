@@ -4,8 +4,6 @@ AWSTemplateFormatVersion: 2010-09-09
 
 Description: Resources for setting up an api gateway with a lambda proxy backend.
 
-# TODO: This is currently lacking associating the authorizer with methods.
-
 Parameters:
 
   CertificateArn:
@@ -15,6 +13,15 @@ Parameters:
   ZoneDomain:
     Type: String
     Description: The zone domain for the resource
+
+  HostedZoneId:
+    Type: String
+    Default: ""
+    Description: >-
+      Optional Route 53 hosted zone id. Set this when multiple hosted zones
+      share the same ZoneDomain name (otherwise the DNS record lookup by name
+      is ambiguous and the stack fails with "Multiple hosted zones with name
+      ... found"). When empty, the zone is resolved by ZoneDomain name.
 
   SubDomain:
     Type: String
@@ -35,6 +42,10 @@ Parameters:
   BasicAuthPassword:
     Type: String
     Description: Basic auth password
+
+
+Conditions:
+  UseHostedZoneId: !Not [ !Equals [ !Ref HostedZoneId, "" ] ]
 
 
 Resources:
@@ -65,6 +76,8 @@ Resources:
                   required: true
                   type: string
               responses: {}
+              security:
+                - BasicAuthAuthorizer: []
               x-amazon-apigateway-integration:
                 uri: !Join ["", ["arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/", !Ref LambdaFunctionArn, "/invocations" ] ]
                 httpMethod: POST
@@ -102,6 +115,20 @@ Resources:
           Empty:
             type: object
             title: Empty Schema
+        securityDefinitions:
+          BasicAuthAuthorizer:
+            type: apiKey
+            name: Authorization
+            in: header
+            x-amazon-apigateway-authtype: custom
+            x-amazon-apigateway-authorizer:
+              type: request
+              identitySource: method.request.header.Authorization
+              # No result caching: cache is keyed on the identity source, which
+              # would let one accepted credential authorise others until TTL.
+              authorizerResultTtlInSeconds: 0
+              authorizerUri: !Join ["", ["arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/", !GetAtt LambdaAuthorizer.Arn, "/invocations" ] ]
+              authorizerCredentials: !GetAtt LambdaAuthorizerApiGatewayRole.Arn
 
   LambdaApiGatewayExecutionPermission:
     Type: AWS::Lambda::Permission
@@ -153,12 +180,16 @@ Resources:
     DependsOn:
       - ApiGatewayApiDomainName
     Properties:
-      HostedZoneName: !Join [ "", [ !Ref ZoneDomain, "." ] ]
+      HostedZoneName: !If [ UseHostedZoneId, !Ref "AWS::NoValue", !Join [ "", [ !Ref ZoneDomain, "." ] ] ]
+      HostedZoneId: !If [ UseHostedZoneId, !Ref HostedZoneId, !Ref "AWS::NoValue" ]
       Name: !Join [ ".", [ !Ref SubDomain, !Ref ZoneDomain ] ]
-      TTL: 300
-      ResourceRecords:
-        - !GetAtt ApiGatewayApiDomainName.DistributionDomainName
-      Type: ALIAS
+      Type: A
+      AliasTarget:
+        # EDGE-optimised API Gateway domains are fronted by CloudFront, so the
+        # alias target zone is the fixed CloudFront hosted zone id.
+        DNSName: !GetAtt ApiGatewayApiDomainName.DistributionDomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+        EvaluateTargetHealth: false
 
   LambdaAuthorizerRole:
     Type: AWS::IAM::Role
@@ -190,27 +221,58 @@ Resources:
     Properties:
       Code:
         ZipFile: |
+          const crypto = require('crypto');
+          
+          // Constant-time string comparison to avoid leaking length/prefix via timing.
+          function safeEqual(a, b) {
+              const ab = Buffer.from(String(a));
+              const bb = Buffer.from(String(b));
+              if (ab.length !== bb.length) {
+                  // Still run a comparison to keep timing roughly constant.
+                  crypto.timingSafeEqual(ab, ab);
+                  return false;
+              }
+              return crypto.timingSafeEqual(ab, bb);
+          }
+          
           exports.handler = function (event, context, callback) {
-              var authorizationHeader = event.headers.Authorization;
+              const headers = event.headers || {};
+              // API Gateway does not normalise header casing across clients (HTTP/2
+              // lower-cases header names), so accept either form.
+              const authorizationHeader = headers.Authorization || headers.authorization;
           
-              if (!authorizationHeader)
+              if (!authorizationHeader) {
                   return callback('Unauthorized');
+              }
           
-              var encodedCreds = authorizationHeader.split(' ')[1];
-              var plainCreds = (new Buffer(encodedCreds, 'base64')).toString().split(':');
-              var username = plainCreds[0];
-              var password = plainCreds[1];
-          
-              if (!(username === process.env.BASIC_AUTH_USER && password === process.env.BASIC_AUTH_PASSWORD))
+              const parts = authorizationHeader.split(' ');
+              if (parts.length !== 2 || parts[0] !== 'Basic') {
                   return callback('Unauthorized');
+              }
           
-              var tmp = event.methodArn.split(':')
-              var apiGatewayArnTmp = tmp[5].split('/')
-              var awsAccountId = tmp[4]
-              var awsRegion = tmp[3]
-              var restApiId = apiGatewayArnTmp[0]
-              var stage = apiGatewayArnTmp[1]
-              var apiArn = 'arn:aws:execute-api:' + awsRegion + ':' + awsAccountId + ':' + restApiId + '/' + stage + '/*/*'
+              let plainCreds;
+              try {
+                  plainCreds = Buffer.from(parts[1], 'base64').toString('utf8').split(':');
+              } catch (e) {
+                  return callback('Unauthorized');
+              }
+          
+              const username = plainCreds[0];
+              const password = plainCreds.slice(1).join(':'); // passwords may contain ':'
+          
+              const userOk = safeEqual(username, process.env.BASIC_AUTH_USER);
+              const passOk = safeEqual(password, process.env.BASIC_AUTH_PASSWORD);
+              if (!(userOk && passOk)) {
+                  return callback('Unauthorized');
+              }
+          
+              const tmp = event.methodArn.split(':');
+              const apiGatewayArnTmp = tmp[5].split('/');
+              const awsAccountId = tmp[4];
+              const awsRegion = tmp[3];
+              const restApiId = apiGatewayArnTmp[0];
+              const stage = apiGatewayArnTmp[1];
+              const apiArn = 'arn:aws:execute-api:' + awsRegion + ':' + awsAccountId + ':' + restApiId + '/' + stage + '/*/*';
           
               callback(null, {
                   principalId: 'user',
@@ -218,7 +280,7 @@ Resources:
                       Version: '2012-10-17',
                       Statement: [{
                           Action: 'execute-api:Invoke',
-                          Effect: "Allow",
+                          Effect: 'Allow',
                           Resource: apiArn
                       }]
                   }
@@ -231,7 +293,7 @@ Resources:
           BASIC_AUTH_PASSWORD: !Ref BasicAuthPassword
       Handler: index.handler
       Role: !GetAtt LambdaAuthorizerRole.Arn
-      Runtime: nodejs16.x
+      Runtime: nodejs22.x
       Timeout: 60
 
   LambdaAuthorizerApiGatewayRole:
@@ -257,20 +319,6 @@ Resources:
               - Effect: Allow
                 Action: lambda:InvokeFunction
                 Resource: !GetAtt LambdaAuthorizer.Arn
-
-  ApiGatewayAuthorizer:
-    Type: AWS::ApiGateway::Authorizer
-    DependsOn:
-      - ApiGatewayApi
-      - LambdaAuthorizer
-      - LambdaAuthorizerApiGatewayRole
-    Properties:
-      Name: !Join [ "", [ !Ref ResourceName, "Authorizer" ] ]
-      RestApiId: !Ref ApiGatewayApi
-      Type: REQUEST
-      AuthorizerUri: !Join [ "", [ "arn:aws:apigateway:", !Ref "AWS::Region", ":lambda:path/2015-03-31/functions/", !GetAtt LambdaAuthorizer.Arn, "/invocations" ] ]
-      AuthorizerCredentials: !GetAtt LambdaAuthorizerApiGatewayRole.Arn
-      IdentitySource: method.request.header.Authorization
 
   ApiGatewayBasicAuthResponse:
     Type: AWS::ApiGateway::GatewayResponse
